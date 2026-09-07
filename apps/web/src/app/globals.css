@@ -1,0 +1,245 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------------ */
+/* AIDA design tokens                                                  */
+/* Brand blue sampled directly from the logo mark (#1F48FF).           */
+/* Neutrals carry a faint cool tint at the brand hue (265.7) so grays   */
+/* read as part of the same system instead of generic shadcn gray.     */
+/* ------------------------------------------------------------------ */
+
+:root {
+  /* brand scale */
+  --brand-50: oklch(0.96 0.019 276.3);
+  --brand-100: oklch(0.919 0.039 274.5);
+  --brand-200: oklch(0.838 0.08 273.7);
+  --brand-300: oklch(0.738 0.135 273.4);
+  --brand-400: oklch(0.623 0.203 271.4);
+  --brand-500: oklch(0.548 0.25 268.7);
+  --brand-600: oklch(0.517 0.269 265.7); /* logo blue, #1F48FF */
+  --brand-700: oklch(0.44 0.235 265.7);
+  --brand-800: oklch(0.373 0.197 266.2);
+  --brand-900: oklch(0.305 0.153 267.5);
+  --brand-950: oklch(0.233 0.107 268.9);
+
+  /* neutrals, tinted at the brand hue */
+  --neutral-25: oklch(0.985 0.003 265.7);
+  --neutral-50: oklch(0.975 0.004 265.7);
+  --neutral-100: oklch(0.95 0.006 265.7);
+  --neutral-200: oklch(0.89 0.008 265.7);
+  --neutral-300: oklch(0.8 0.01 265.7);
+  --neutral-400: oklch(0.65 0.012 265.7);
+  --neutral-500: oklch(0.55 0.012 265.7);
+  --neutral-600: oklch(0.45 0.012 265.7);
+  --neutral-700: oklch(0.37 0.012 265.7);
+  --neutral-800: oklch(0.27 0.01 265.7);
+  --neutral-900: oklch(0.19 0.008 265.7);
+  --neutral-950: oklch(0.13 0.006 265.7);
+
+  /* semantic: correct / mastery / success */
+  --success-100: oklch(0.962 0.043 156.7);
+  --success-600: oklch(0.627 0.17 149.2);
+  --success-900: oklch(0.393 0.09 152.5);
+
+  /* semantic: incorrect / failure / danger */
+  --danger-100: oklch(0.936 0.031 17.7);
+  --danger-600: oklch(0.577 0.215 27.3);
+  --danger-900: oklch(0.396 0.133 25.7);
+
+  /* semantic: "needs review" (2 consecutive low scores) — deliberately
+     warm/amber, distinct from brand blue "due on schedule", per the
+     design doc's requirement that these two signals never look the same. */
+  --review-100: oklch(0.962 0.058 95.6);
+  --review-600: oklch(0.666 0.157 58.3);
+  --review-900: oklch(0.414 0.105 45.9);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-display);
+
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
+
+  --color-neutral-25: var(--neutral-25);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-950: var(--neutral-950);
+
+  --color-success-100: var(--success-100);
+  --color-success-600: var(--success-600);
+  --color-success-900: var(--success-900);
+  --color-danger-100: var(--danger-100);
+  --color-danger-600: var(--danger-600);
+  --color-danger-900: var(--danger-900);
+  --color-review-100: var(--review-100);
+  --color-review-600: var(--review-600);
+  --color-review-900: var(--review-900);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: var(--neutral-900);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--neutral-900);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--neutral-900);
+  --primary: var(--brand-600);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: var(--neutral-100);
+  --secondary-foreground: var(--neutral-900);
+  --muted: var(--neutral-50);
+  --muted-foreground: var(--neutral-500);
+  --accent: var(--brand-50);
+  --accent-foreground: var(--brand-800);
+  --destructive: var(--danger-600);
+  --border: var(--neutral-200);
+  --input: var(--neutral-200);
+  --ring: var(--brand-400);
+  --chart-1: var(--brand-600);
+  --chart-2: var(--success-600);
+  --chart-3: var(--review-600);
+  --chart-4: var(--brand-300);
+  --chart-5: var(--neutral-400);
+  --radius: 0.75rem;
+  --sidebar: var(--neutral-25);
+  --sidebar-foreground: var(--neutral-900);
+  --sidebar-primary: var(--brand-600);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: var(--brand-50);
+  --sidebar-accent-foreground: var(--brand-800);
+  --sidebar-border: var(--neutral-200);
+  --sidebar-ring: var(--brand-400);
+}
+
+.dark {
+  --background: var(--neutral-950);
+  --foreground: var(--neutral-100);
+  --card: var(--neutral-900);
+  --card-foreground: var(--neutral-100);
+  --popover: var(--neutral-900);
+  --popover-foreground: var(--neutral-100);
+  --primary: var(--brand-400);
+  --primary-foreground: var(--neutral-950);
+  --secondary: var(--neutral-800);
+  --secondary-foreground: var(--neutral-100);
+  --muted: var(--neutral-800);
+  --muted-foreground: var(--neutral-400);
+  --accent: var(--brand-950);
+  --accent-foreground: var(--brand-200);
+  --destructive: var(--danger-600);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--brand-400);
+  --chart-1: var(--brand-400);
+  --chart-2: var(--success-600);
+  --chart-3: var(--review-600);
+  --chart-4: var(--brand-700);
+  --chart-5: var(--neutral-500);
+  --sidebar: var(--neutral-900);
+  --sidebar-foreground: var(--neutral-100);
+  --sidebar-primary: var(--brand-400);
+  --sidebar-primary-foreground: var(--neutral-950);
+  --sidebar-accent: var(--brand-950);
+  --sidebar-accent-foreground: var(--brand-200);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: var(--brand-400);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading;
+  }
+  /* Tailwind's preflight intentionally leaves <button> at the browser
+     default (arrow) cursor. Every button/tab/toggle in this app is
+     click-driven, so the pointer cursor is restored globally instead of
+     per-component. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"] {
+    cursor: pointer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

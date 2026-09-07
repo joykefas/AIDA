@@ -1,0 +1,26 @@
+{
+  "name": "aida",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev": "concurrently -n web,api -c blue,magenta \"npm:dev:web\" \"npm:dev:api\"",
+    "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "start:web": "npm run start --workspace=apps/web",
+    "start:api": "npm run start:prod --workspace=apps/api",
+    "start": "concurrently -n web,api -c blue,magenta \"npm:start:web\" \"npm:start:api\"",
+    "lint:web": "npm run lint --workspace=apps/web",
+    "lint:api": "npm run lint --workspace=apps/api",
+    "lint": "npm run lint:api && npm run lint:web",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "playwright": "^1.62.1"
+  }
+}

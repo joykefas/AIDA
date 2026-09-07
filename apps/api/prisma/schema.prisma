@@ -1,0 +1,230 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+enum DocType {
+  PDF
+  AUDIO
+  YOUTUBE
+  TEXT
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum LearningStyle {
+  DIAGRAMS
+  STORIES
+  ANALOGIES
+  FORMULAS
+  AUDIO
+}
+
+enum QuestionType {
+  MCQ
+  WRITTEN
+}
+
+enum ExamStatus {
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
+enum UserRole {
+  STUDENT
+  SUPPORT
+  ADMIN
+}
+
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  passwordHash          String?
+  googleId              String?   @unique
+  displayName           String?
+  birthdate             DateTime
+  isMinor               Boolean   @default(false)
+  parentalConsentGiven  Boolean   @default(false)
+  learningStyle         LearningStyle?
+  role                  UserRole  @default(STUDENT)
+  refreshTokenHash      String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  documents           Document[]
+  quizAttempts        QuizAttempt[]
+  tutorMessages       TutorMessage[]
+  passwordResetTokens PasswordResetToken[]
+  examSessions        ExamSession[]
+}
+
+model Document {
+  id             String            @id @default(uuid())
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           DocType
+  title          String
+  sourceUrl      String?
+  storageKey     String?
+  status         ProcessingStatus  @default(PENDING)
+  failureReason  String?
+  extractedText  String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  topics Topic[]
+
+  @@index([userId])
+}
+
+model Topic {
+  id                   String    @id @default(uuid())
+  documentId           String
+  document             Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  title                String
+  subject              String    @default("General")
+  summary              String    @default("")
+  notes                Json      @default("[]")
+  mindMapJson          Json      @default("{\"nodes\":[],\"edges\":[]}")
+
+  // SM-2 spaced-repetition state
+  masteryScore         Float     @default(0)
+  easeFactor           Float     @default(2.5)
+  intervalDays         Int       @default(0)
+  repetitions          Int       @default(0)
+  consecutiveLowScores Int       @default(0)
+  nextReviewDue        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  embeddings    Embedding[]
+  quizQuestions QuizQuestion[]
+  examSessions  ExamSession[]
+
+  @@index([documentId])
+}
+
+model Embedding {
+  id      String                       @id @default(uuid())
+  topicId String
+  topic   Topic                        @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  chunk   String
+  vector  Unsupported("vector(1536)")
+
+  @@index([topicId])
+}
+
+model QuizQuestion {
+  id            String        @id @default(uuid())
+  topicId       String
+  topic         Topic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  type          QuestionType
+  prompt        String
+  options       Json?
+  correctAnswer String?
+  createdAt     DateTime      @default(now())
+
+  attempts QuizAttempt[]
+
+  @@index([topicId])
+}
+
+model QuizAttempt {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userAnswer    String
+  score         Float?
+  correct       Boolean?
+  aiFeedback    String?
+  isDisputed    Boolean      @default(false)
+  disputeReason String?
+  createdAt     DateTime     @default(now())
+
+  @@index([userId])
+  @@index([questionId])
+}
+
+model ContactSubmission {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model TutorMessage {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId      String?
+  role         String
+  content      String
+  citations    Json?
+  rating       String?
+  feedbackText String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([tokenHash])
+  @@index([userId])
+}
+
+model ExamSession {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicId         String
+  topic           Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  status          ExamStatus  @default(IN_PROGRESS)
+  questionCount   Int
+  durationMinutes Int
+  score           Float?
+  startedAt       DateTime    @default(now())
+  expiresAt       DateTime
+  completedAt     DateTime?
+
+  @@index([userId])
+  @@index([topicId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String
+  action       String
+  targetUserId String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}

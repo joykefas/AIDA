@@ -1,0 +1,52 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+apps/web/.next/
+apps/web/out/
+
+# nest / node build output
+apps/api/dist/
+packages/shared/dist/
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# testing
+coverage/
+
+# misc
+.DS_Store
+*.pem
+.vscode/*
+!.vscode/extensions.json
+
+# turbo / cache
+.turbo/
+
+# prisma
+apps/api/prisma/dev.db
+apps/api/prisma.config.js
+apps/api/prisma.config.d.ts
+apps/api/prisma.config.js.map
+apps/api/prisma/seed.js
+apps/api/prisma/seed.d.ts
+apps/api/prisma/seed.js.map
+apps/api/tsconfig.build.tsbuildinfo
+
+# docker volumes (bind-mounted local data, if any)
+infra/.data/
+.claude/
+aida_docs/
+aida_logos/

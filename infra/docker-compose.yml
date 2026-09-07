@@ -1,0 +1,68 @@
+name: aida
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aida
+      POSTGRES_PASSWORD: aida_dev_password
+      POSTGRES_DB: aida
+    ports:
+      - "5434:5432"
+    volumes:
+      - aida_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aida -d aida"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - aida_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: aida_minio
+      MINIO_ROOT_PASSWORD: aida_minio_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - aida_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 aida_minio aida_minio_password &&
+      mc mb -p local/aida-uploads &&
+      mc anonymous set download local/aida-uploads &&
+      exit 0
+      "
+
+volumes:
+  aida_postgres_data:
+  aida_redis_data:
+  aida_minio_data:
