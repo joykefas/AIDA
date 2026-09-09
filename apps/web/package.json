@@ -33,5 +33,9 @@
     "lightningcss": "^1.29.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "lightningcss-linux-x64-gnu": "^1.29.0",
+    "lightningcss-win32-x64-msvc": "^1.29.0"
   }
 }
