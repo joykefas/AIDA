@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { FileText, Mic, Link2, Type, CheckCircle2 } from "lucide-react";
+import { FileText, Mic, Link2, Type, CheckCircle2, Square, Circle } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormError } from "@/components/ui/form-error";
@@ -34,10 +34,23 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // MediaRecorder state for in-browser audio recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [micError, setMicError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function pollUntilDone(documentId: string) {
@@ -88,6 +101,21 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
     }
   }
 
+  function handleSelectedFile(selectedFile: File | null) {
+    if (!selectedFile) {
+      setFile(null);
+      return;
+    }
+    const MAX_SIZE = 50 * 1024 * 1024;
+    if (selectedFile.size > MAX_SIZE) {
+      setError("File exceeds the 50MB size limit. Please choose a smaller file.");
+      setFile(null);
+      return;
+    }
+    setError(null);
+    setFile(selectedFile);
+  }
+
   function resetForm() {
     setMode(DocType.PDF);
     setFile(null);
@@ -96,7 +124,65 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
     setTitle("");
     setStatus("idle");
     setError(null);
+    stopRecording();
+    setAudioBlob(null);
+    if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }
+    setMicError(null);
   }
+
+  // ── In-browser audio recording helpers ─────────────────────────────────────
+  async function startRecording() {
+    setMicError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+
+      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+        setAudioBlob(blob);
+        const ext = (mr.mimeType || "audio/webm").includes("ogg") ? "ogg" : "webm";
+        const recordedFile = new File([blob], `recording.${ext}`, { type: blob.type });
+        setFile(recordedFile);
+        const url = URL.createObjectURL(blob);
+        setAudioPreviewUrl(url);
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      mr.start();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      timerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Microphone access denied.";
+      setMicError(`Could not access microphone: ${msg}`);
+    }
+  }
+
+  function stopRecording() {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  }
+
+  function cancelRecording() {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setAudioBlob(null);
+    setFile(null);
+    if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }
+    chunksRef.current = [];
+  }
+
+  const fmtSecs = (s: number) =>
+    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
   return (
     <div className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-5">
@@ -129,7 +215,92 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
         onChange={(e) => setTitle(e.target.value)}
       />
 
-      {(mode === DocType.PDF || mode === DocType.AUDIO) && (
+      {mode === DocType.AUDIO && (
+        <div className="flex flex-col gap-3">
+          {/* In-browser recording controls */}
+          {!audioBlob && !isRecording && (
+            <button
+              type="button"
+              onClick={startRecording}
+              className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-400 bg-brand-50 px-4 py-6 text-sm font-medium text-brand-700 transition hover:bg-brand-100 dark:border-brand-700 dark:bg-brand-950 dark:text-brand-300"
+            >
+              <Circle className="size-5 fill-red-500 text-red-500" />
+              Start Recording
+            </button>
+          )}
+
+          {isRecording && (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-5 dark:border-red-900 dark:bg-red-950/30">
+              <div className="flex items-center gap-2">
+                <span className="size-3 animate-pulse rounded-full bg-red-500" />
+                <span className="font-mono text-sm font-semibold text-red-600 dark:text-red-400">{fmtSecs(recordingSeconds)} Recording…</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="flex items-center gap-1.5 rounded-lg bg-red-500 px-4 py-2 text-xs font-medium text-white hover:bg-red-600"
+                >
+                  <Square className="size-3.5" /> Stop
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="rounded-lg border border-border bg-background px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {audioBlob && audioPreviewUrl && (
+            <div className="flex flex-col gap-2 rounded-xl border border-border p-3">
+              <span className="text-xs font-medium text-muted-foreground">Preview recording:</span>
+              <audio controls src={audioPreviewUrl} className="w-full" />
+              <button
+                type="button"
+                onClick={cancelRecording}
+                className="self-end text-xs text-red-500 hover:underline"
+              >
+                Re-record
+              </button>
+            </div>
+          )}
+
+          {micError && <p className="text-xs text-red-500">{micError}</p>}
+
+          {/* Fallback file picker */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            <span>or upload a recorded file</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-5 text-center text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/20"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={(e) => {
+                setAudioBlob(null);
+                if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }
+                handleSelectedFile(e.target.files?.[0] ?? null);
+              }}
+            />
+            {file && !audioBlob ? (
+              <span className="font-medium text-foreground">{file.name}</span>
+            ) : (
+              <span>Click to choose an audio file</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {mode === DocType.PDF && (
         <div
           onClick={() => fileInputRef.current?.click()}
           className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-8 text-center text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/20"
@@ -137,16 +308,14 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
           <input
             ref={fileInputRef}
             type="file"
-            accept={mode === DocType.PDF ? "application/pdf" : "audio/*"}
+            accept="application/pdf"
             className="hidden"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => handleSelectedFile(e.target.files?.[0] ?? null)}
           />
           {file ? (
             <span className="font-medium text-foreground">{file.name}</span>
           ) : (
-            <span>
-              {mode === DocType.PDF ? "Click to choose a PDF" : "Click to choose an audio file"}
-            </span>
+            <span>Click to choose a PDF</span>
           )}
         </div>
       )}

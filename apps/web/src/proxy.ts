@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 const ACCESS_COOKIE = "aida_access";
 const REFRESH_COOKIE = "aida_refresh";
 const AUTH_ROUTES = ["/login", "/register"];
-const PROTECTED_PREFIXES = ["/home", "/library", "/tutor", "/review", "/progress", "/onboarding"];
+const ADMIN_AUTH_ROUTE = "/admin/login";
+const PROTECTED_PREFIXES = ["/home", "/library", "/tutor", "/review", "/progress", "/onboarding", "/settings"];
 const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:6001";
 
 /**
@@ -24,34 +25,56 @@ const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:6001";
  */
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
-  const isAuthRoute = AUTH_ROUTES.some((p) => pathname.startsWith(p));
+  const isAdminAuth = pathname === ADMIN_AUTH_ROUTE;
+  const isAdminProtected = pathname.startsWith("/admin") && !isAdminAuth;
+  const isStudentProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  const isStudentAuth = AUTH_ROUTES.some((p) => pathname.startsWith(p));
 
   const hasRefresh = req.cookies.has(REFRESH_COOKIE);
   const hasAccess = req.cookies.has(ACCESS_COOKIE);
 
-  if (isProtected) {
+  // Admin protected routes: redirect unauthenticated directly to /admin/login
+  if (isAdminProtected) {
     if (!hasRefresh) {
-      return redirectToLogin(req, pathname);
+      return redirectToLogin(req, pathname, "/admin/login");
     }
     if (!hasAccess) {
       const refreshed = await tryRefresh(req);
       if (refreshed) return refreshed;
-      return redirectToLogin(req, pathname);
+      return redirectToLogin(req, pathname, "/admin/login");
     }
     return NextResponse.next();
   }
 
-  if (isAuthRoute && hasRefresh) {
+  // Student protected routes: redirect unauthenticated to /login
+  if (isStudentProtected) {
+    if (!hasRefresh) {
+      return redirectToLogin(req, pathname, "/login");
+    }
+    if (!hasAccess) {
+      const refreshed = await tryRefresh(req);
+      if (refreshed) return refreshed;
+      return redirectToLogin(req, pathname, "/login");
+    }
+    return NextResponse.next();
+  }
+
+  // If already authenticated and visiting admin login, send directly to /admin
+  if (isAdminAuth && hasRefresh) {
+    return NextResponse.redirect(new URL("/admin", req.url));
+  }
+
+  // If already authenticated and visiting student auth, send to /home
+  if (isStudentAuth && hasRefresh) {
     return NextResponse.redirect(new URL("/home", req.url));
   }
 
   return NextResponse.next();
 }
 
-function redirectToLogin(req: NextRequest, from: string) {
+function redirectToLogin(req: NextRequest, from: string, loginPath = "/login") {
   const url = req.nextUrl.clone();
-  url.pathname = "/login";
+  url.pathname = loginPath;
   url.searchParams.set("next", from);
   const res = NextResponse.redirect(url);
   res.cookies.delete(ACCESS_COOKIE);
@@ -104,5 +127,17 @@ async function tryRefresh(req: NextRequest): Promise<NextResponse | null> {
 }
 
 export const config = {
-  matcher: ["/home/:path*", "/library/:path*", "/tutor/:path*", "/review/:path*", "/progress/:path*", "/onboarding/:path*", "/login", "/register"],
+  matcher: [
+    "/home/:path*",
+    "/library/:path*",
+    "/tutor/:path*",
+    "/review/:path*",
+    "/progress/:path*",
+    "/onboarding/:path*",
+    "/admin",
+    "/admin/:path*",
+    "/settings/:path*",
+    "/login",
+    "/register",
+  ],
 };

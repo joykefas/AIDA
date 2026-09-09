@@ -1,10 +1,7 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   LearningStyle,
+  TutorCitation,
   TutorChatMessage,
   TutorMessageResponse,
 } from '@aida/shared';
@@ -32,27 +29,25 @@ export class TutorService {
     userId: string,
     dto: TutorMessageDto,
   ): Promise<TutorMessageResponse> {
-    if (dto.topicId) {
-      const owned = await this.prisma.topic.findFirst({
-        where: { id: dto.topicId, document: { userId } },
-      });
-      if (!owned)
-        throw new ForbiddenException("That topic doesn't belong to you.");
-    }
-
-    const topicIds = dto.topicId
-      ? [dto.topicId]
-      : (
-          await this.prisma.topic.findMany({
-            where: { document: { userId } },
-            select: { id: true },
-          })
-        ).map((t) => t.id);
-
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
     });
     const learningStyle = user.learningStyle as LearningStyle | null;
+
+    let topicIds: string[] = [];
+    if (dto.topicId) {
+      const topic = await this.prisma.topic.findFirst({
+        where: { id: dto.topicId, document: { userId } },
+      });
+      if (!topic) throw new NotFoundException('Topic not found.');
+      topicIds = [topic.id];
+    } else {
+      const topics = await this.prisma.topic.findMany({
+        where: { document: { userId } },
+        select: { id: true },
+      });
+      topicIds = topics.map((t) => t.id);
+    }
 
     const contextChunks =
       topicIds.length > 0
@@ -68,7 +63,7 @@ export class TutorService {
         text: c.chunk,
       })),
       learningStyle,
-      simplify: dto.simplify ?? false,
+      simplify: Boolean(dto.simplify),
     });
 
     await this.prisma.tutorMessage.create({
@@ -90,7 +85,7 @@ export class TutorService {
           topicTitle: c.topicTitle,
           noteAnchor: 'notes',
           excerpt: c.chunk.slice(0, 200),
-        })) as any,
+        })),
       },
     });
 
@@ -138,7 +133,7 @@ export class TutorService {
       id: m.id,
       role: m.role as 'user' | 'assistant',
       content: m.content,
-      citations: (m.citations as any) ?? undefined,
+      citations: (m.citations as unknown as TutorCitation[]) ?? undefined,
       rating: m.rating,
       createdAt: m.createdAt.toISOString(),
     }));

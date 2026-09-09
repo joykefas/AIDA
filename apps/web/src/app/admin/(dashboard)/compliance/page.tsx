@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShieldCheck, FileText, Trash2, Download, AlertCircle } from "lucide-react";
+import { Trash2, Download } from "lucide-react";
 import { clientFetch } from "@/lib/api-client";
 import type { AdminAuditLogItem } from "@aida/shared";
-import { cn } from "cn";
 
 export default function AdminCompliancePage() {
   const [logs, setLogs] = useState<AdminAuditLogItem[]>([]);

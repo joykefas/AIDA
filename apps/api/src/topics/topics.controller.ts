@@ -46,7 +46,7 @@ export class TopicsController {
   }
 
   @Post(':id/tutor')
-  async askTutor(
+  askTutor(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
     @Body() dto: TutorMessageDto,

@@ -90,7 +90,9 @@ export class MockLlmProvider extends LlmProvider {
   async generateContent(input: {
     title: string;
     rawText: string;
+    learningStyle?: LearningStyle | null;
   }): Promise<GeneratedContent> {
+    await Promise.resolve();
     const sectionCount = Math.min(
       5,
       Math.max(3, Math.ceil(input.rawText.length / 400)),
@@ -141,19 +143,52 @@ export class MockLlmProvider extends LlmProvider {
       },
     ];
 
+    const styleNote = input.learningStyle
+      ? ` [Adapted for ${input.learningStyle} style]`
+      : '';
+
+    const primarySummary = `"${input.title}" covers ${notes.length} main ideas: ${notes
+      .map((n) => n.heading)
+      .join(', ')}.${styleNote}`;
+
+    // Provide multi-topic segmentation when there are multiple sections
+    const topics =
+      notes.length >= 2
+        ? notes.map((n, i) => ({
+            title: `${input.title}: ${n.heading}`,
+            summary: `Covers ${n.heading} in depth.${styleNote}`,
+            notes: [n],
+            mindMap: {
+              nodes: [
+                { id: 'root', label: n.heading, noteAnchor: n.anchor },
+                ...n.bullets.map((b, bIdx) => ({
+                  id: `n${bIdx + 1}`,
+                  label: truncateAtWord(b, 40),
+                  noteAnchor: n.anchor,
+                })),
+              ],
+              edges: n.bullets.map((_, bIdx) => ({
+                source: 'root',
+                target: `n${bIdx + 1}`,
+              })),
+            },
+            quizQuestions: quizQuestions.slice(i, i + 2),
+          }))
+        : undefined;
+
     return {
-      summary: `"${input.title}" covers ${notes.length} main ideas: ${notes
-        .map((n) => n.heading)
-        .join(', ')}.`,
+      summary: primarySummary,
       notes,
       mindMap,
       quizQuestions,
+      topics,
     };
   }
 
   async answerTutorQuestion(
     input: TutorAnswerInput,
   ): Promise<TutorAnswerOutput> {
+    await Promise.resolve();
     const opener = input.learningStyle
       ? STYLE_OPENER[input.learningStyle]
       : "Here's the explanation:";
@@ -173,6 +208,7 @@ export class MockLlmProvider extends LlmProvider {
   async gradeWrittenResponse(
     input: GradeWrittenInput,
   ): Promise<GradeWrittenOutput> {
+    await Promise.resolve();
     const answerWords = new Set(
       input.studentAnswer.toLowerCase().split(/\W+/).filter(Boolean),
     );

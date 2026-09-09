@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
@@ -19,6 +20,7 @@ export class QuizController {
     return this.quizService.listForTopic(user.sub, topicId);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('topics/:topicId/quiz/generate')
   generate(
     @CurrentUser() user: AccessTokenPayload,
@@ -27,6 +29,7 @@ export class QuizController {
     return this.quizService.generateMore(user.sub, topicId);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Post('quiz/:questionId/attempt')
   attempt(
     @CurrentUser() user: AccessTokenPayload,

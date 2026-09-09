@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { REFRESH_COOKIE } from '../auth.constants';
-import { RefreshTokenPayload } from '../jwt.types';
+import type { RefreshTokenPayload } from '../jwt.types';
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -12,15 +12,19 @@ export class JwtRefreshStrategy extends PassportStrategy(
 ) {
   constructor() {
     super({
-      jwtFromRequest: (req: Request) => req?.cookies?.[REFRESH_COOKIE] ?? null,
+      jwtFromRequest: (req: Request): string | null =>
+        (req?.cookies?.[REFRESH_COOKIE] as string | undefined) ?? null,
       ignoreExpiration: false,
       secretOrKey: process.env.JWT_REFRESH_SECRET as string,
       passReqToCallback: true,
     });
   }
 
-  validate(req: Request, payload: RefreshTokenPayload) {
-    const token = req.cookies?.[REFRESH_COOKIE];
+  validate(
+    req: Request,
+    payload: RefreshTokenPayload,
+  ): RefreshTokenPayload & { refreshToken: string } {
+    const token = (req.cookies?.[REFRESH_COOKIE] as string | undefined) ?? '';
     return { ...payload, refreshToken: token };
   }
 }

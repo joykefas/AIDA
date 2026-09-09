@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { LearningStyle } from '@aida/shared';
 import {
   LlmProvider,
   GeneratedContent,
@@ -15,84 +16,166 @@ function stripMarkdownCodeFence(text: string): string {
 }
 
 /**
- * Calls an OpenAI-compatible chat/completions endpoint (Cloudflare Workers AI,
- * Groq, Fireworks AI, or Together AI, per LLM_BASE_URL or CLOUDFLARE_ACCOUNT_ID).
- * Flash handles high-volume generation (notes/quiz); Pro is reserved for the
- * tutor and grading, where answer quality matters most.
+ * Primary: Groq API (llama-3.3-70b-versatile).
+ * Backup: Cloudflare Workers AI (@cf/meta/llama-3.3-70b-instruct-fp8-fast) with automatic runtime failover.
  */
 @Injectable()
 export class LiveLlmProvider extends LlmProvider {
   private readonly logger = new Logger(LiveLlmProvider.name);
+
+  private readonly groqApiKey =
+    process.env.GROQ_API_KEY ?? process.env.LLM_API_KEY;
+  private readonly groqModel =
+    process.env.GROQ_LLM_MODEL ?? 'llama-3.3-70b-versatile';
+
   private readonly cfAccountId =
     process.env.CLOUDFLARE_ACCOUNT_ID ?? process.env.CF_ACCOUNT_ID;
-  private readonly baseUrl =
-    process.env.LLM_BASE_URL ||
-    (this.cfAccountId
-      ? `https://api.cloudflare.com/client/v4/accounts/${this.cfAccountId}/ai/v1`
-      : undefined);
-  private readonly apiKey =
-    process.env.LLM_API_KEY || process.env.CLOUDFLARE_API_TOKEN;
-  private readonly flashModel =
-    process.env.LLM_MODEL_FLASH ??
-    (this.cfAccountId
-      ? '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
-      : 'llama-3.3-70b-versatile');
-  private readonly proModel =
-    process.env.LLM_MODEL_PRO ??
-    (this.cfAccountId
-      ? '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
-      : 'llama-3.3-70b-versatile');
+  private readonly cfApiToken = process.env.CLOUDFLARE_API_TOKEN;
+  private readonly cfModel =
+    process.env.CLOUDFLARE_LLM_MODEL ??
+    '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
-  private async chatComplete(
+  private readonly customBaseUrl = process.env.LLM_BASE_URL;
+
+  private async callEndpoint(
+    url: string,
+    apiKey: string,
     model: string,
     systemPrompt: string,
     userPrompt: string,
+    isJson: boolean,
   ): Promise<string> {
-    if (!this.baseUrl || !this.apiKey) {
-      throw new Error(
-        'LLM credentials not configured (set LLM_BASE_URL & LLM_API_KEY or CLOUDFLARE_ACCOUNT_ID & CLOUDFLARE_API_TOKEN)',
-      );
+    const payload: Record<string, unknown> = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+    };
+
+    if (isJson) {
+      payload.response_format = { type: 'json_object' };
     }
 
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-      }),
+      body: JSON.stringify(payload),
     });
+
     if (!res.ok) {
       const body = await res.text();
-      this.logger.error(`LLM call failed: ${res.status} ${body}`);
-      throw new Error(`LLM provider error: ${res.status}`);
+      throw new Error(`HTTP ${res.status}: ${body}`);
     }
+
     const data = (await res.json()) as {
       choices: { message: { content: string } }[];
     };
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Malformed response from LLM endpoint');
+    }
     return data.choices[0].message.content;
+  }
+
+  private async chatComplete(
+    systemPrompt: string,
+    userPrompt: string,
+    isJson = false,
+  ): Promise<string> {
+    // 1. If explicit custom base URL is configured, route there directly
+    if (this.customBaseUrl && this.groqApiKey) {
+      return this.callEndpoint(
+        `${this.customBaseUrl}/chat/completions`,
+        this.groqApiKey,
+        this.groqModel,
+        systemPrompt,
+        userPrompt,
+        isJson,
+      );
+    }
+
+    // 2. Primary provider: Groq API
+    if (this.groqApiKey) {
+      try {
+        return await this.callEndpoint(
+          'https://api.groq.com/openai/v1/chat/completions',
+          this.groqApiKey,
+          this.groqModel,
+          systemPrompt,
+          userPrompt,
+          isJson,
+        );
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.warn(
+          `Groq primary LLM request failed: ${message}. Attempting failover to Cloudflare Workers AI backup...`,
+        );
+      }
+    }
+
+    // 3. Backup provider: Cloudflare Workers AI
+    if (this.cfAccountId && this.cfApiToken) {
+      try {
+        const cfUrl = `https://api.cloudflare.com/client/v4/accounts/${this.cfAccountId}/ai/v1/chat/completions`;
+        return await this.callEndpoint(
+          cfUrl,
+          this.cfApiToken,
+          this.cfModel,
+          systemPrompt,
+          userPrompt,
+          isJson,
+        );
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `Cloudflare Workers AI backup LLM failed: ${message}`,
+        );
+        throw new Error(`All LLM providers failed: ${message}`);
+      }
+    }
+
+    throw new Error(
+      'LLM credentials not configured. Please set GROQ_API_KEY (primary) and/or CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN (backup).',
+    );
   }
 
   async generateContent(input: {
     title: string;
     rawText: string;
+    learningStyle?: LearningStyle | null;
   }): Promise<GeneratedContent> {
+    const stylePrompt = input.learningStyle
+      ? ` Explain in a style suited to: ${input.learningStyle}.`
+      : '';
     const system =
-      'You generate study notes as JSON: {summary, notes:[{heading,anchor,bullets}], mindMap:{nodes:[{id,label,noteAnchor}],edges:[{source,target}]}, quizQuestions:[{type,prompt,options,correctAnswer}]}.';
+      `You generate study notes as JSON with this shape: ` +
+      `{"topics":[{"title":"...","summary":"...","notes":[{"heading":"...","anchor":"...","bullets":["..."]}],` +
+      `"mindMap":{"nodes":[{"id":"...","label":"...","noteAnchor":"..."}],"edges":[{"source":"...","target":"..."}]},` +
+      `"quizQuestions":[{"type":"MCQ|WRITTEN","prompt":"...","options":[{"id":"a","text":"..."}],"correctAnswer":"..."}]}]}.` +
+      ` Identify 1-5 logical topics/sections from the material and generate separate notes for each.${stylePrompt}`;
     const content = await this.chatComplete(
-      this.flashModel,
       system,
       `Title: ${input.title}\n\nMaterial:\n${input.rawText}`,
+      true,
     );
     const cleaned = stripMarkdownCodeFence(content);
-    return JSON.parse(cleaned) as GeneratedContent;
+    const parsed = JSON.parse(cleaned) as GeneratedContent;
+    // Normalise: if model returned legacy flat shape, promote it into topics array
+    if (!parsed.topics && parsed.summary) {
+      parsed.topics = [
+        {
+          title: input.title,
+          summary: parsed.summary,
+          notes: parsed.notes ?? [],
+          mindMap: parsed.mindMap ?? { nodes: [], edges: [] },
+          quizQuestions: parsed.quizQuestions ?? [],
+        },
+      ];
+    }
+    return parsed;
   }
 
   async answerTutorQuestion(
@@ -110,9 +193,9 @@ export class LiveLlmProvider extends LlmProvider {
       ? 'Simplify further than a typical explanation.'
       : '';
     const answer = await this.chatComplete(
-      this.proModel,
       `${system} ${styleNote} ${simplifyNote}`,
       `Context:\n${context}\n\nQuestion: ${input.question}`,
+      false,
     );
     return { answer };
   }
@@ -120,12 +203,14 @@ export class LiveLlmProvider extends LlmProvider {
   async gradeWrittenResponse(
     input: GradeWrittenInput,
   ): Promise<GradeWrittenOutput> {
-    const system =
-      'Grade the student answer against the prompt and reference answer. Respond as JSON: {"score": 0-1, "feedback": "specific, qualitative feedback"}.';
+    const styleNote = input.learningStyle
+      ? ` Phrase all qualitative feedback to match the student's learning style preference: ${input.learningStyle} (e.g. use diagrams/analogies/stories/formulas/audio-style language as appropriate).`
+      : '';
+    const system = `Grade the student answer against the prompt and reference answer. Respond as JSON: {"score": 0-1, "feedback": "specific, qualitative feedback"}.${styleNote}`;
     const content = await this.chatComplete(
-      this.proModel,
       system,
       `Prompt: ${input.prompt}\nReference answer: ${input.correctAnswer ?? '(none provided)'}\nStudent answer: ${input.studentAnswer}`,
+      true,
     );
     const cleaned = stripMarkdownCodeFence(content);
     return JSON.parse(cleaned) as GradeWrittenOutput;

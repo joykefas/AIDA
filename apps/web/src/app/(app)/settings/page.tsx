@@ -6,13 +6,13 @@ import {
   Download,
   Trash2,
   CheckCircle2,
-  Brain,
   Layers,
   BookOpen,
   Sparkles,
   Binary,
   Headphones,
   Shield,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,9 @@ export default function SettingsPage() {
   const [exporting, setExporting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [emailOptOut, setEmailOptOut] = useState(false);
+  const [savingOptOut, setSavingOptOut] = useState(false);
+  const [optOutNotice, setOptOutNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -75,12 +78,43 @@ export default function SettingsPage() {
         setProfile(data);
         setDisplayName(data.displayName ?? "");
         if (data.learningStyle) setSelectedStyle(data.learningStyle);
+        const optOut = !!data.emailOptOut;
+        setEmailOptOut(optOut);
+
+        // If arrived via unsubscribe link in weekly report email
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get("unsubscribe") === "1" && !optOut) {
+            handleToggleOptOut(true);
+            setOptOutNotice("You have successfully unsubscribed from weekly progress report emails.");
+          }
+        }
       })
       .catch((err) => {
         setError(err instanceof ApiClientError ? err.message : "Failed to load profile.");
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleToggleOptOut(optOut: boolean) {
+    setSavingOptOut(true);
+    try {
+      await clientFetch("/users/me/email-opt-out", {
+        method: "PATCH",
+        body: JSON.stringify({ optOut }),
+      });
+      setEmailOptOut(optOut);
+      setOptOutNotice(
+        optOut
+          ? "You have unsubscribed from weekly progress emails."
+          : "You are subscribed to weekly progress emails.",
+      );
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Failed to update email preferences.");
+    } finally {
+      setSavingOptOut(false);
+    }
+  }
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -224,6 +258,47 @@ export default function SettingsPage() {
           </div>
         </section>
       </form>
+
+      <section className="rounded-2xl border border-border bg-card p-6 flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <Mail className="size-5 text-brand-600" />
+          <div>
+            <h2 className="font-heading text-lg font-medium">Email Preferences</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Control which automated emails AIDA delivers to your inbox.
+            </p>
+          </div>
+        </div>
+
+        {optOutNotice && (
+          <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-3 text-xs text-brand-900 dark:border-brand-900/50 dark:bg-brand-950/40 dark:text-brand-200 flex items-center gap-2">
+            <CheckCircle2 className="size-4 shrink-0 text-brand-600" />
+            <span>{optOutNotice}</span>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2 border-t border-border">
+          <div>
+            <p className="text-sm font-medium">Weekly Progress Report</p>
+            <p className="text-xs text-muted-foreground">
+              Delivered every Monday morning with your quiz mastery, strengths, and review suggestions.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant={emailOptOut ? "outline" : "secondary"}
+            disabled={savingOptOut}
+            onClick={() => handleToggleOptOut(!emailOptOut)}
+            className="text-xs shrink-0"
+          >
+            {savingOptOut
+              ? "Updating…"
+              : emailOptOut
+              ? "Disabled (Opted Out) — Click to Enable"
+              : "Enabled (Receiving) — Click to Disable"}
+          </Button>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-border bg-card p-6 flex flex-col gap-4">
         <div>

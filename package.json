@@ -9,17 +9,26 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev": "concurrently -n web,api -c blue,magenta \"npm:dev:web\" \"npm:dev:api\"",
+    "build:shared": "npm run build --workspace=packages/shared",
+    "build:web": "npm run build --workspace=packages/shared && npm run build --workspace=apps/web",
+    "build:api": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api",
+    "prisma:deploy": "npm run prisma:deploy --workspace=apps/api",
     "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "vercel-build": "npm run build:web",
     "start:web": "npm run start --workspace=apps/web",
     "start:api": "npm run start:prod --workspace=apps/api",
     "start": "concurrently -n web,api -c blue,magenta \"npm:start:web\" \"npm:start:api\"",
     "lint:web": "npm run lint --workspace=apps/web",
     "lint:api": "npm run lint --workspace=apps/api",
     "lint": "npm run lint:api && npm run lint:web",
+    "test": "npm run test:unit",
+    "test:unit": "npm run test --workspace=apps/api",
+    "test:e2e": "playwright test",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "concurrently": "^9.1.0",
     "playwright": "^1.62.1"
   }

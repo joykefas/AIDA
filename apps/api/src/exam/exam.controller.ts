@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
@@ -11,11 +12,13 @@ import { SubmitExamDto } from './dto/submit-exam.dto';
 export class ExamController {
   constructor(private examService: ExamService) {}
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('start')
   start(@CurrentUser() user: AccessTokenPayload, @Body() dto: StartExamDto) {
     return this.examService.start(user.sub, dto);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post(':id/submit')
   submit(
     @CurrentUser() user: AccessTokenPayload,

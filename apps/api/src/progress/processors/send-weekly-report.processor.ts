@@ -16,26 +16,58 @@ export class SendWeeklyReportProcessor extends WorkerHost {
     super();
   }
 
-  async process(_job: Job) {
-    const users = await this.prisma.user.findMany({
-      select: { id: true, email: true, displayName: true },
-    });
+  async process(job: Job) {
+    void job;
+    const BATCH_SIZE = 50;
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
-    for (const user of users) {
-      const report = await this.progressService.weekly(user.id);
-      const html = this.renderReportHtml(
-        user.displayName || 'Student',
-        report,
-        appUrl,
-      );
+    let cursor: string | undefined;
+    let processedCount = 0;
 
-      await this.email.send({
-        to: user.email,
-        subject: `Your AIDA Weekly Learning Report (${report.currentStreakDays}-day streak!)`,
-        html,
+    // Cursor-paginated batching to avoid loading the entire user table into memory
+    let hasMore = true;
+    while (hasMore) {
+      const users = await this.prisma.user.findMany({
+        take: BATCH_SIZE,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        orderBy: { id: 'asc' },
+        where: { emailOptOut: false }, // Skip users who have unsubscribed
+        select: { id: true, email: true, displayName: true },
       });
+
+      if (users.length === 0) break;
+      cursor = users[users.length - 1].id;
+
+      for (const user of users) {
+        try {
+          const report = await this.progressService.weekly(user.id);
+          const html = this.renderReportHtml(
+            user.displayName || 'Student',
+            report,
+            appUrl,
+          );
+
+          await this.email.send({
+            to: user.email,
+            subject: `Your AIDA Weekly Learning Report (${report.currentStreakDays}-day streak!)`,
+            html,
+          });
+          processedCount++;
+        } catch (err) {
+          // Log per-user failure but continue to the next user
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(
+            `[WeeklyReport] Failed to send report to ${user.email}: ${message}`,
+          );
+        }
+      }
+
+      if (users.length < BATCH_SIZE) {
+        hasMore = false;
+      }
     }
+
+    console.log(`[WeeklyReport] Sent reports to ${processedCount} users.`);
   }
 
   private renderReportHtml(
@@ -43,6 +75,7 @@ export class SendWeeklyReportProcessor extends WorkerHost {
     report: WeeklyProgressReport,
     appUrl: string,
   ): string {
+    const unsubscribeUrl = `${appUrl}/settings?unsubscribe=1`;
     const strengthsHtml =
       report.strengths.length > 0
         ? report.strengths
@@ -142,6 +175,7 @@ export class SendWeeklyReportProcessor extends WorkerHost {
     <!-- Footer -->
     <div style="background-color: #f8fafc; padding: 16px 24px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
       <p style="margin: 0;">Sent by AIDA Adaptive Learning Platform. You received this because weekly progress summaries are enabled in your account settings.</p>
+      <p style="margin: 6px 0 0;"><a href="${unsubscribeUrl}" style="color: #94a3b8; text-decoration: underline;">Unsubscribe from weekly reports</a> &middot; <a href="${appUrl}/settings" style="color: #94a3b8; text-decoration: underline;">Manage email preferences</a></p>
     </div>
   </div>
 </body>
