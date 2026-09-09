@@ -12,6 +12,7 @@
     "build:shared": "npm run build --workspace=packages/shared",
     "build:web": "npm run build --workspace=packages/shared && npm run build --workspace=apps/web",
     "build:api": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api",
+    "prisma:deploy": "npm run prisma:deploy --workspace=apps/api",
     "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
     "vercel-build": "npm run build:web",
     "start:web": "npm run start --workspace=apps/web",
