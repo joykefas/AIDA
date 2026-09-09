@@ -24,5 +24,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Install Linux native binaries
+        run: npm install --no-save @tailwindcss/oxide-linux-x64-gnu@4.3.3
+
       - name: Build
         run: npm run build
