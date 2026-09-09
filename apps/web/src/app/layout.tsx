@@ -23,6 +23,9 @@ export const metadata: Metadata = {
   title: "AIDA: Upload it. Understand it. Never forget it.",
   description:
     "AIDA turns your PDFs, lecture recordings, and notes into organized notes, a tutor grounded in your own material, and a review schedule that tells you what to study before you forget it.",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
