@@ -1,14 +1,12 @@
 import {
   Controller,
   Post,
-  Get,
   Body,
   Req,
   Res,
   UseGuards,
   HttpCode,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -100,24 +98,5 @@ export class AuthController {
     const tokens = await this.authService.refresh(user.sub, user.refreshToken);
     this.setAuthCookies(res, tokens);
     return { ok: true };
-  }
-
-  @Get('google')
-  @UseGuards(AuthGuard('google'))
-  googleAuth() {
-    // Passport redirects to Google; this handler body never runs.
-  }
-
-  @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  async googleCallback(@Req() req: Request, @Res() res: Response) {
-    const profile = req.user as {
-      googleId: string;
-      email: string;
-      displayName?: string;
-    };
-    const tokens = await this.authService.validateOrCreateGoogleUser(profile);
-    this.setAuthCookies(res, tokens);
-    res.redirect(`${process.env.WEB_ORIGIN}/onboarding`);
   }
 }

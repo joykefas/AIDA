@@ -5,7 +5,13 @@ import { LogOut } from "lucide-react";
 import { clientFetch } from "@/lib/api-client";
 import { cn } from "cn";
 
-export function LogoutButton({ className }: { className?: string }) {
+export function LogoutButton({
+  className,
+  redirectTo = "/login",
+}: {
+  className?: string;
+  redirectTo?: string;
+}) {
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function handleLogout() {
@@ -16,8 +22,7 @@ export function LogoutButton({ className }: { className?: string }) {
       // A real navigation, not router.push() — the logout response clears
       // the session cookies, and the rest of the app's auth-transition
       // points (see (app)/error.tsx) all use a full reload for this reason.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = "/login";
+      window.location.href = redirectTo;
     }
   }
 

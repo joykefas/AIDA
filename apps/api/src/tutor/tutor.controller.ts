@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
@@ -19,6 +20,7 @@ import { RateTutorMessageDto } from './dto/rate-tutor-message.dto';
 export class TutorController {
   constructor(private tutorService: TutorService) {}
 
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post()
   ask(@CurrentUser() user: AccessTokenPayload, @Body() dto: TutorMessageDto) {
     return this.tutorService.answer(user.sub, dto);

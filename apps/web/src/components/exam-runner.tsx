@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, XCircle, Timer, AlertCircle, Award, RotateCcw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Timer, Award, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { clientFetch, ApiClientError } from "@/lib/api-client";
 import { cn } from "cn";
@@ -18,42 +18,7 @@ export function ExamRunner({ topicId, documentId }: { topicId: string; documentI
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Countdown timer effect
-  useEffect(() => {
-    if (!session || results || timeLeft <= 0) return;
-    const timer = setTimeout(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [session, results, timeLeft]);
-
-  async function startExam() {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await clientFetch<ExamSessionDto>("/exam/start", {
-        method: "POST",
-        body: JSON.stringify({ topicId }),
-      });
-      setSession(data);
-      setTimeLeft(data.durationMinutes * 60);
-      setIndex(0);
-      setAnswers({});
-      setResults(null);
-    } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Failed to start exam. Ensure quiz questions exist.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSubmit() {
+  const handleSubmit = useCallback(async () => {
     if (!session || submitting) return;
     setSubmitting(true);
     setError(null);
@@ -73,11 +38,51 @@ export function ExamRunner({ topicId, documentId }: { topicId: string; documentI
     } finally {
       setSubmitting(false);
     }
-  }
+  }, [session, submitting, answers]);
 
-  function handleAutoSubmit() {
+  const handleSubmitRef = useRef(handleSubmit);
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
+
+  const handleAutoSubmit = useCallback(() => {
     if (!submitting && session && !results) {
-      handleSubmit();
+      void handleSubmitRef.current();
+    }
+  }, [submitting, session, results]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (!session || results || timeLeft <= 0) return;
+    const timer = setTimeout(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          handleAutoSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [session, results, timeLeft, handleAutoSubmit]);
+
+  async function startExam() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await clientFetch<ExamSessionDto>("/exam/start", {
+        method: "POST",
+        body: JSON.stringify({ topicId }),
+      });
+      setSession(data);
+      setTimeLeft(data.durationMinutes * 60);
+      setIndex(0);
+      setAnswers({});
+      setResults(null);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Failed to start exam. Ensure quiz questions exist.");
+    } finally {
+      setLoading(false);
     }
   }
 

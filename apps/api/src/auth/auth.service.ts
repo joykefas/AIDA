@@ -78,40 +78,6 @@ export class AuthService {
     return this.issueTokens(user.id, user.email, user.role as UserRole);
   }
 
-  async validateOrCreateGoogleUser(input: {
-    googleId: string;
-    email: string;
-    displayName?: string;
-  }) {
-    let user = await this.prisma.user.findUnique({
-      where: { googleId: input.googleId },
-    });
-    if (!user) {
-      user = await this.prisma.user.findUnique({
-        where: { email: input.email },
-      });
-    }
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          email: input.email,
-          googleId: input.googleId,
-          displayName: input.displayName,
-          // Google OAuth doesn't hand us a birthdate; route through the app's
-          // own age-gate screen post-signup rather than assuming an age.
-          birthdate: new Date(0),
-          isMinor: true,
-        },
-      });
-    } else if (!user.googleId) {
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: { googleId: input.googleId },
-      });
-    }
-    return this.issueTokens(user.id, user.email, user.role as UserRole);
-  }
-
   async refresh(userId: string, presentedToken: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.refreshTokenHash) throw new UnauthorizedException();

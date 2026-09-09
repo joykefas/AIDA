@@ -4,10 +4,12 @@ import { EmbeddingProvider, EMBEDDING_DIM } from '../embedding.provider';
 @Injectable()
 export class MockEmbeddingProvider extends EmbeddingProvider {
   async embed(text: string): Promise<number[]> {
+    await Promise.resolve();
     return this.generateDeterministicVector(text);
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
+    await Promise.resolve();
     return texts.map((t) => this.generateDeterministicVector(t));
   }
 

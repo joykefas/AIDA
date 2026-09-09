@@ -124,4 +124,21 @@ export class DocumentsService {
       topics: document.topics.map(toTopicSummary),
     };
   }
+
+  async remove(userId: string, id: string): Promise<{ deleted: boolean }> {
+    const document = await this.prisma.document.findFirst({
+      where: { id, userId },
+    });
+    if (!document) throw new NotFoundException('Document not found.');
+
+    // Clean up object storage first so a DB failure doesn't leave an orphan key
+    if (document.storageKey) {
+      await this.storage.delete(document.storageKey);
+    }
+
+    // Cascade on Document deletes Topics → Embeddings, QuizQuestions, ExamSessions
+    await this.prisma.document.delete({ where: { id } });
+
+    return { deleted: true };
+  }
 }

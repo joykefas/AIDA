@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -22,7 +24,24 @@ export class DocumentsController {
 
   @Post()
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }),
+    FileInterceptor('file', {
+      limits: { fileSize: 50 * 1024 * 1024 },
+      fileFilter: (_req, file, callback) => {
+        if (
+          file.mimetype === 'application/pdf' ||
+          file.mimetype.startsWith('audio/')
+        ) {
+          callback(null, true);
+        } else {
+          callback(
+            new BadRequestException(
+              `Unsupported file format: ${file.mimetype}. Allowed formats: PDF and audio.`,
+            ),
+            false,
+          );
+        }
+      },
+    }),
   )
   create(
     @CurrentUser() user: AccessTokenPayload,
@@ -40,5 +59,10 @@ export class DocumentsController {
   @Get(':id')
   findOne(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.documentsService.findOne(user.sub, id);
+  }
+
+  @Delete(':id')
+  remove(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.documentsService.remove(user.sub, id);
   }
 }

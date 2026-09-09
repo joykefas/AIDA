@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -74,7 +73,8 @@ export class ExamService {
         topicId: q.topicId,
         type: q.type as QuestionType,
         prompt: q.prompt,
-        options: (q.options as any) ?? null,
+        options:
+          (q.options as unknown as { id: string; text: string }[]) ?? null,
       })),
     };
   }
@@ -94,8 +94,19 @@ export class ExamService {
     });
     if (!session) throw new NotFoundException('Exam session not found.');
 
-    if (session.status !== ExamStatus.IN_PROGRESS) {
+    if ((session.status as string) !== (ExamStatus.IN_PROGRESS as string)) {
       throw new BadRequestException('Exam session has already been completed.');
+    }
+
+    // Enforce server-side timer — reject submissions after expiry window
+    if (new Date() > session.expiresAt) {
+      await this.prisma.examSession.update({
+        where: { id: session.id },
+        data: { status: ExamStatus.EXPIRED, completedAt: new Date() },
+      });
+      throw new BadRequestException(
+        'Exam time has expired. Your session has been closed.',
+      );
     }
 
     const user = await this.prisma.user.findUniqueOrThrow({
@@ -118,7 +129,7 @@ export class ExamService {
       let correct = false;
       let feedback = '';
 
-      if (question.type === QuestionType.MCQ) {
+      if ((question.type as string) === (QuestionType.MCQ as string)) {
         correct = question.correctAnswer === userAnswer;
         score = correct ? 1 : 0;
         feedback = correct
@@ -161,7 +172,7 @@ export class ExamService {
         questionId: question.id,
         userAnswer,
         correctAnswer:
-          question.type === QuestionType.MCQ
+          (question.type as string) === (QuestionType.MCQ as string)
             ? (question.correctAnswer ?? undefined)
             : undefined,
         score,
@@ -228,7 +239,8 @@ export class ExamService {
         topicId: q.topicId,
         type: q.type as QuestionType,
         prompt: q.prompt,
-        options: (q.options as any) ?? null,
+        options:
+          (q.options as unknown as { id: string; text: string }[]) ?? null,
       })),
     };
   }

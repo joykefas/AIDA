@@ -16,9 +16,13 @@ export class ProgressModule implements OnModuleInit {
   constructor(@InjectQueue(QUEUE_SEND_WEEKLY_REPORT) private queue: Queue) {}
 
   async onModuleInit() {
+    // Default: Monday 08:00 UTC. Override via WEEKLY_REPORT_CRON env var
+    // (standard 5-field cron, server runs UTC). Example for 09:00 WAT (UTC+1):
+    //   WEEKLY_REPORT_CRON="0 8 * * 1"
+    const cronPattern = process.env.WEEKLY_REPORT_CRON ?? '0 8 * * 1';
     await this.queue.upsertJobScheduler(
       'weekly-report-every-monday',
-      { pattern: '0 8 * * 1' },
+      { pattern: cronPattern },
       {
         name: 'weekly',
         data: {},

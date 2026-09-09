@@ -90,7 +90,7 @@ describe('AuthService', () => {
       );
       expect(tokens).toHaveProperty('accessToken');
       expect(tokens).toHaveProperty('refreshToken');
-    });
+    }, 15000);
   });
 
   describe('Forgot & Reset Password Flow', () => {

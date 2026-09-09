@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { ACCESS_COOKIE } from '../auth.constants';
-import { AccessTokenPayload } from '../jwt.types';
+import type { AccessTokenPayload } from '../jwt.types';
 
 @Injectable()
 export class JwtAccessStrategy extends PassportStrategy(
@@ -12,13 +12,14 @@ export class JwtAccessStrategy extends PassportStrategy(
 ) {
   constructor() {
     super({
-      jwtFromRequest: (req: Request) => req?.cookies?.[ACCESS_COOKIE] ?? null,
+      jwtFromRequest: (req: Request): string | null =>
+        (req?.cookies?.[ACCESS_COOKIE] as string | undefined) ?? null,
       ignoreExpiration: false,
       secretOrKey: process.env.JWT_ACCESS_SECRET as string,
     });
   }
 
-  validate(payload: AccessTokenPayload) {
+  validate(payload: AccessTokenPayload): AccessTokenPayload {
     return payload;
   }
 }

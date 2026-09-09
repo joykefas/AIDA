@@ -1,7 +1,29 @@
 import { LearningStyle } from '@aida/shared';
 import { NoteSection, MindMapData } from '@aida/shared';
 
+/** A single topic section generated from a document. */
+export interface GeneratedTopic {
+  title: string;
+  summary: string;
+  notes: NoteSection[];
+  mindMap: MindMapData;
+  quizQuestions: Array<{
+    type: 'MCQ' | 'WRITTEN';
+    prompt: string;
+    options?: { id: string; text: string }[];
+    correctAnswer?: string;
+  }>;
+}
+
+/**
+ * What the LLM returns for a document.
+ * `topics` is the preferred multi-topic shape; `summary/notes/mindMap/quizQuestions`
+ * are kept for backward-compat with the mock provider and single-topic callers.
+ */
 export interface GeneratedContent {
+  /** Multi-topic output — one entry per logical section of the document. */
+  topics?: GeneratedTopic[];
+  // --- Legacy single-topic fields (still supported, used when topics is absent) ---
   summary: string;
   notes: NoteSection[];
   mindMap: MindMapData;
@@ -46,14 +68,16 @@ export interface GradeWrittenOutput {
  * DI token + contract for the LLM used for note/quiz generation, the RAG tutor,
  * and written-response grading. `MockLlmProvider` implements this with
  * deterministic canned output (AI_PROVIDER_MODE=mock, the default); the live
- * implementation calls DeepSeek V4 via Fireworks/Together AI once real keys
- * are configured. Route/service code depends only on this abstract class, so
- * switching modes never touches call sites.
+ * implementation (`LiveLlmProvider`) calls Groq API (llama-3.3-70b-versatile,
+ * primary) with automatic failover to Cloudflare Workers AI
+ * (@cf/meta/llama-3.3-70b-instruct-fp8-fast, backup). Route/service code
+ * depends only on this abstract class, so switching modes never touches call sites.
  */
 export abstract class LlmProvider {
   abstract generateContent(input: {
     title: string;
     rawText: string;
+    learningStyle?: LearningStyle | null;
   }): Promise<GeneratedContent>;
   abstract answerTutorQuestion(
     input: TutorAnswerInput,

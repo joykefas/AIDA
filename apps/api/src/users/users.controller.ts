@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Patch,
   Res,
   UseGuards,
@@ -53,6 +54,24 @@ export class UsersController {
   @Get('me/export')
   exportData(@CurrentUser() user: AccessTokenPayload) {
     return this.usersService.exportUserData(user.sub);
+  }
+
+  @Patch('me/email-opt-out')
+  @HttpCode(200)
+  setEmailOptOut(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { optOut: boolean },
+  ) {
+    return this.usersService.setEmailOptOut(user.sub, body.optOut);
+  }
+
+  @Patch('me/cookie-consent')
+  @HttpCode(200)
+  setCookieConsent(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { consent: string },
+  ) {
+    return this.usersService.setCookieConsent(user.sub, body.consent);
   }
 
   @Delete('me')

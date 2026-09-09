@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormError } from "@/components/ui/form-error";
@@ -85,9 +85,8 @@ function ResetPasswordForm() {
           <CardContent className="flex flex-col gap-4 mb-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">New password</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 required
                 minLength={8}
                 value={newPassword}
@@ -97,9 +96,8 @@ function ResetPasswordForm() {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="confirmPassword">Confirm new password</Label>
-              <Input
+              <PasswordInput
                 id="confirmPassword"
-                type="password"
                 required
                 minLength={8}
                 value={confirmPassword}

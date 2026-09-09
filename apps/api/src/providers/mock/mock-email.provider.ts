@@ -10,6 +10,7 @@ export class MockEmailProvider extends EmailProvider {
     subject: string;
     html: string;
   }): Promise<void> {
+    await Promise.resolve();
     this.logger.log(`[mock email] to=${input.to} subject="${input.subject}"`);
   }
 }
