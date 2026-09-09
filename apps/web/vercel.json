@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "cd ../.. && npm run build:web",
-  "installCommand": "cd ../.. && npm install"
+  "installCommand": "cd ../.. && npm install && npm install --no-save @tailwindcss/oxide-linux-x64-gnu@4.3.3 --workspace=apps/web"
 }
