@@ -8,17 +8,28 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
+    const rawUrl = process.env.DATABASE_URL ?? '';
     const isCloudDb = Boolean(
-      process.env.DATABASE_URL &&
-      (process.env.DATABASE_URL.includes('sslmode=') ||
-        process.env.DATABASE_URL.includes('aivencloud.com') ||
-        process.env.DATABASE_URL.includes('neon.tech') ||
-        process.env.DATABASE_URL.includes('supabase.co')),
+      rawUrl.includes('sslmode=') ||
+      rawUrl.includes('aivencloud.com') ||
+      rawUrl.includes('neon.tech') ||
+      rawUrl.includes('supabase.co'),
     );
+
+    const connectionString = isCloudDb
+      ? rawUrl.includes('sslmode=')
+        ? rawUrl.replace(
+            /sslmode=(require|prefer|verify-ca)/,
+            'sslmode=no-verify',
+          )
+        : rawUrl.includes('?')
+          ? `${rawUrl}&sslmode=no-verify`
+          : `${rawUrl}?sslmode=no-verify`
+      : rawUrl;
 
     super({
       adapter: new PrismaPg({
-        connectionString: process.env.DATABASE_URL,
+        connectionString,
         ssl: isCloudDb ? { rejectUnauthorized: false } : undefined,
       }),
     });
