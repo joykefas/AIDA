@@ -9,6 +9,28 @@ import {
   DocumentJobData,
 } from '../../queue/queue.constants';
 
+function detectAudioMimeType(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'wav':
+      return 'audio/wav';
+    case 'm4a':
+      return 'audio/m4a';
+    case 'ogg':
+    case 'oga':
+      return 'audio/ogg';
+    case 'webm':
+      return 'audio/webm';
+    case 'flac':
+      return 'audio/flac';
+    case 'aac':
+      return 'audio/aac';
+    case 'mp3':
+    default:
+      return 'audio/mpeg';
+  }
+}
+
 @Processor(QUEUE_TRANSCRIBE_AUDIO)
 export class TranscribeAudioProcessor extends WorkerHost {
   constructor(
@@ -30,9 +52,12 @@ export class TranscribeAudioProcessor extends WorkerHost {
       if (!document.storageKey)
         throw new Error('No file stored for this document.');
       const buffer = await this.storage.download(document.storageKey);
+      const mimeType = detectAudioMimeType(
+        document.storageKey || document.title,
+      );
       const { text } = await this.transcription.transcribe({
         fileBuffer: buffer,
-        mimeType: 'audio/mpeg',
+        mimeType,
       });
       await this.ingestion.setExtractedTextAndAdvance(documentId, text);
     } catch (err) {

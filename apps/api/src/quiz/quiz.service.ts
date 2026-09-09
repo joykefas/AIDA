@@ -9,6 +9,7 @@ import {
   QuizAttemptResult,
   QuizQuestionDto,
 } from '@aida/shared';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmProvider } from '../providers/llm.provider';
 import { ReviewService } from '../review/review.service';
@@ -35,7 +36,7 @@ export class QuizService {
       topicId: q.topicId,
       type: q.type as QuestionType,
       prompt: q.prompt,
-      options: (q.options as any) ?? null,
+      options: (q.options as unknown as { id: string; text: string }[]) ?? null,
     }));
   }
 
@@ -60,7 +61,7 @@ export class QuizService {
             topicId: topic.id,
             type: q.type,
             prompt: q.prompt,
-            options: q.options as any,
+            options: (q.options ?? null) as unknown as Prisma.InputJsonValue,
             correctAnswer: q.correctAnswer,
           },
         }),
@@ -72,7 +73,7 @@ export class QuizService {
       topicId: q.topicId,
       type: q.type as QuestionType,
       prompt: q.prompt,
-      options: (q.options as any) ?? null,
+      options: (q.options as unknown as { id: string; text: string }[]) ?? null,
     }));
   }
 
@@ -92,7 +93,7 @@ export class QuizService {
     let correct: boolean;
     let feedback: string;
 
-    if (question.type === QuestionType.MCQ) {
+    if ((question.type as string) === (QuestionType.MCQ as string)) {
       correct = question.correctAnswer === answer;
       score = correct ? 1 : 0;
       feedback = correct
@@ -131,7 +132,7 @@ export class QuizService {
       score,
       correct,
       correctAnswer:
-        question.type === QuestionType.MCQ
+        (question.type as string) === (QuestionType.MCQ as string)
           ? (question.correctAnswer ?? undefined)
           : undefined,
       feedback,
@@ -167,7 +168,7 @@ export class QuizService {
       score: updated.score ?? 0,
       correct: updated.correct ?? false,
       correctAnswer:
-        updated.question.type === QuestionType.MCQ
+        (updated.question.type as string) === (QuestionType.MCQ as string)
           ? (updated.question.correctAnswer ?? undefined)
           : undefined,
       feedback: updated.aiFeedback ?? '',

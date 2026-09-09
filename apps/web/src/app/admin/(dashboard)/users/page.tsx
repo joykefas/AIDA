@@ -34,23 +34,34 @@ export default function AdminUsersPage() {
 
   // Export state
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  function loadUsers() {
-    setLoading(true);
+  useEffect(() => {
+    let ignore = false;
     const params = new URLSearchParams();
     if (search.trim()) params.set("search", search.trim());
     if (minorFilter === "minor") params.set("isMinor", "true");
     if (minorFilter === "adult") params.set("isMinor", "false");
 
     clientFetch<AdminUserListItem[]>(`/admin/users?${params.toString()}`)
-      .then(setUsers)
-      .catch((err) => setError(err.message || "Failed to load users"))
-      .finally(() => setLoading(false));
-  }
+      .then((data: AdminUserListItem[]) => {
+        if (!ignore) {
+          setUsers(data);
+          setLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          const message = err instanceof Error ? err.message : "Failed to load users";
+          setError(message);
+          setLoading(false);
+        }
+      });
 
-  useEffect(() => {
-    loadUsers();
-  }, [minorFilter]);
+    return () => {
+      ignore = true;
+    };
+  }, [search, minorFilter, refreshKey]);
 
   async function handleExport(user: AdminUserListItem) {
     setExportingId(user.id);
@@ -67,10 +78,25 @@ export default function AdminUsersPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
-      alert(err.message || "Failed to export user data");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to export user data";
+      alert(message);
     } finally {
       setExportingId(null);
+    }
+  }
+
+  async function handleToggleConsent(user: AdminUserListItem) {
+    try {
+      const updated = await clientFetch<AdminUserListItem>(`/admin/users/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ parentalConsentGiven: !user.parentalConsentGiven }),
+      });
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update parental consent status";
+      alert(message);
     }
   }
 
@@ -83,8 +109,9 @@ export default function AdminUsersPage() {
       setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id));
       setDeletingUser(null);
       setConfirmEmail("");
-    } catch (err: any) {
-      setDeleteError(err.message || "Failed to delete user");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete user";
+      setDeleteError(message);
     } finally {
       setIsDeleting(false);
     }
@@ -97,14 +124,14 @@ export default function AdminUsersPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            loadUsers();
+            setRefreshKey((k) => k + 1);
           }}
           className="relative max-w-md flex-1"
         >
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             placeholder="Search users by email or display name…"
             className="pl-9"
           />
@@ -221,6 +248,23 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      {u.isMinor && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className={cn(
+                            "h-8 text-xs",
+                            u.parentalConsentGiven
+                              ? "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                              : "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40",
+                          )}
+                          onClick={() => handleToggleConsent(u)}
+                          title={u.parentalConsentGiven ? "Revoke Parental Consent" : "Grant Parental Consent"}
+                        >
+                          <ShieldCheck className="size-3.5 mr-1" />
+                          {u.parentalConsentGiven ? "Verified" : "Grant"}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -256,7 +300,7 @@ export default function AdminUsersPage() {
 
       {/* Delete User Modal */}
       {deletingUser && (
-        <Dialog open onOpenChange={(open) => !open && setDeletingUser(null)}>
+        <Dialog open onOpenChange={(open: boolean) => !open && setDeletingUser(null)}>
           <DialogContent className="sm:max-w-md">
             <DialogTitle className="flex items-center gap-2 text-danger-600">
               <AlertCircle className="size-5" /> Delete User Account
@@ -273,7 +317,7 @@ export default function AdminUsersPage() {
               </p>
               <Input
                 value={confirmEmail}
-                onChange={(e) => setConfirmEmail(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmEmail(e.target.value)}
                 placeholder={deletingUser.email}
               />
               {deleteError && <p className="text-xs text-danger-600">{deleteError}</p>}

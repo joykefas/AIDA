@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { ProcessingStatus } from '@aida/shared';
+import { ProcessingStatus, LearningStyle } from '@aida/shared';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmProvider } from '../providers/llm.provider';
 import { EmbeddingProvider } from '../providers/embedding.provider';
@@ -58,19 +59,20 @@ export class IngestionService {
     });
     const text = document.extractedText ?? document.title;
 
+    const chunks = chunkText(text, CHUNK_SIZE);
+
     // A placeholder Topic must exist before embeddings can attach to it —
     // full content gets filled in by the generate-content stage.
-    const topic = await this.prisma.topic.upsert({
-      where: { id: `${documentId}-primary` },
-      create: {
-        id: `${documentId}-primary`,
-        documentId,
-        title: document.title,
-      },
-      update: {},
+    // Uses the unique (documentId, isPrimary) constraint for idempotency.
+    let topic = await this.prisma.topic.findFirst({
+      where: { documentId, isPrimary: true },
     });
+    if (!topic) {
+      topic = await this.prisma.topic.create({
+        data: { documentId, title: document.title, isPrimary: true },
+      });
+    }
 
-    const chunks = chunkText(text, CHUNK_SIZE);
     await this.prisma.embedding.deleteMany({ where: { topicId: topic.id } });
     const vectors = await this.embeddingProvider.embedBatch(chunks);
     for (let i = 0; i < chunks.length; i++) {
@@ -91,44 +93,75 @@ export class IngestionService {
   async generateContentForDocument(documentId: string) {
     const document = await this.prisma.document.findUniqueOrThrow({
       where: { id: documentId },
+      include: { user: { select: { learningStyle: true } } },
     });
     const text = document.extractedText ?? document.title;
 
     const generated = await this.llm.generateContent({
       title: document.title,
       rawText: text,
+      learningStyle:
+        (document.user?.learningStyle as LearningStyle | null) ?? null,
     });
 
-    const topic = await this.prisma.topic.upsert({
-      where: { id: `${documentId}-primary` },
-      create: {
-        id: `${documentId}-primary`,
-        documentId,
-        title: document.title,
-      },
-      update: {},
-    });
+    // Resolve topic list — multi-topic if `topics` present, else wrap legacy fields
+    const topicList = generated.topics?.length
+      ? generated.topics
+      : [
+          {
+            title: document.title,
+            summary: generated.summary ?? '',
+            notes: generated.notes ?? [],
+            mindMap: generated.mindMap ?? { nodes: [], edges: [] },
+            quizQuestions: generated.quizQuestions ?? [],
+          },
+        ];
 
-    await this.prisma.topic.update({
-      where: { id: topic.id },
-      data: {
-        summary: generated.summary,
-        notes: generated.notes as any,
-        mindMapJson: generated.mindMap as any,
-      },
-    });
+    const savedTopicIds: string[] = [];
 
-    await this.prisma.quizQuestion.deleteMany({ where: { topicId: topic.id } });
-    for (const q of generated.quizQuestions) {
-      await this.prisma.quizQuestion.create({
+    for (let i = 0; i < topicList.length; i++) {
+      const t = topicList[i];
+      const isPrimary = i === 0;
+
+      // Find or create this topic row
+      let topic = isPrimary
+        ? await this.prisma.topic.findFirst({
+            where: { documentId, isPrimary: true },
+          })
+        : null;
+
+      if (!topic) {
+        topic = await this.prisma.topic.create({
+          data: { documentId, title: t.title, isPrimary },
+        });
+      }
+
+      await this.prisma.topic.update({
+        where: { id: topic.id },
         data: {
-          topicId: topic.id,
-          type: q.type,
-          prompt: q.prompt,
-          options: q.options as any,
-          correctAnswer: q.correctAnswer,
+          title: t.title,
+          summary: t.summary,
+          notes: t.notes as unknown as Prisma.InputJsonValue,
+          mindMapJson: t.mindMap as unknown as Prisma.InputJsonValue,
         },
       });
+
+      await this.prisma.quizQuestion.deleteMany({
+        where: { topicId: topic.id },
+      });
+      for (const q of t.quizQuestions) {
+        await this.prisma.quizQuestion.create({
+          data: {
+            topicId: topic.id,
+            type: q.type,
+            prompt: q.prompt,
+            options: (q.options ?? null) as unknown as Prisma.InputJsonValue,
+            correctAnswer: q.correctAnswer,
+          },
+        });
+      }
+
+      savedTopicIds.push(topic.id);
     }
 
     await this.prisma.document.update({
@@ -136,6 +169,9 @@ export class IngestionService {
       data: { status: ProcessingStatus.READY },
     });
 
-    await this.reviewService.ensureScheduled(topic.id);
+    // Seed spaced-repetition schedule for every generated topic
+    for (const topicId of savedTopicIds) {
+      await this.reviewService.ensureScheduled(topicId);
+    }
   }
 }

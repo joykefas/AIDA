@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormError } from "@/components/ui/form-error";
 import { clientFetch, ApiClientError } from "@/lib/api-client";
-import type { LoginRequest } from "@aida/shared";
+import { UserRole, type LoginRequest, type UserProfile } from "@aida/shared";
 
 export default function LoginPage() {
   return (
@@ -36,7 +37,14 @@ function LoginForm() {
         method: "POST",
         body: JSON.stringify({ email, password } satisfies LoginRequest),
       });
-      router.push(searchParams.get("next") ?? "/home");
+
+      // Fetch user profile to route appropriately: admin/support goes to /admin, students to /home
+      const user = await clientFetch<UserProfile>("/users/me");
+      if (user.role === UserRole.ADMIN || user.role === UserRole.SUPPORT) {
+        router.push("/admin");
+      } else {
+        router.push(searchParams.get("next") ?? "/home");
+      }
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Something went wrong. Try again.");
     } finally {
@@ -70,12 +78,12 @@ function LoginForm() {
                 Forgot password?
               </Link>
             </div>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
             />
           </div>
           {error && <FormError message={error} />}
@@ -84,12 +92,14 @@ function LoginForm() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Logging in…" : "Log in"}
           </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            New to AIDA?{" "}
-            <Link href="/register" className="text-primary hover:underline">
-              Create an account
-            </Link>
-          </p>
+          <div className="flex flex-col items-center gap-1.5 pt-1 text-center text-sm text-muted-foreground">
+            <p>
+              New to AIDA?{" "}
+              <Link href="/register" className="text-primary hover:underline">
+                Create an account
+              </Link>
+            </p>
+          </div>
         </CardFooter>
       </form>
     </Card>

@@ -21,6 +21,8 @@ export interface UserProfile {
   isMinor: boolean;
   role: UserRole;
   createdAt: string;
+  emailOptOut?: boolean;
+  cookieConsent?: string | null;
 }
 
 export interface SetLearningStyleRequest {

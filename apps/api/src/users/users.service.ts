@@ -22,6 +22,8 @@ export class UsersService {
       isMinor: user.isMinor,
       role: user.role as UserProfile['role'],
       createdAt: user.createdAt.toISOString(),
+      emailOptOut: user.emailOptOut,
+      cookieConsent: user.cookieConsent,
     };
   }
 
@@ -56,6 +58,28 @@ export class UsersService {
       data: { learningStyle },
     });
     return this.getProfile(userId);
+  }
+
+  async setEmailOptOut(
+    userId: string,
+    optOut: boolean,
+  ): Promise<{ emailOptOut: boolean }> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { emailOptOut: optOut },
+    });
+    return { emailOptOut: optOut };
+  }
+
+  async setCookieConsent(
+    userId: string,
+    consent: string,
+  ): Promise<{ cookieConsent: string }> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { cookieConsent: consent },
+    });
+    return { cookieConsent: consent };
   }
 
   async exportUserData(userId: string): Promise<UserDataExport> {

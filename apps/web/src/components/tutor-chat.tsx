@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send, Sparkles, BookOpen, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Send, Sparkles, BookOpen, ThumbsUp, ThumbsDown, X, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { clientFetch } from "@/lib/api-client";
 import type { TutorChatMessage } from "@aida/shared";
@@ -21,6 +21,9 @@ export function TutorChat({
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // feedbackPopover tracks which message ID has the thumbs-down feedback box open
+  const [feedbackPopover, setFeedbackPopover] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
   // Guards against the history fetch resolving after the user has already
   // sent a message (e.g. switching tabs and typing immediately) — without
   // this, the late history response overwrites state and silently wipes the
@@ -50,15 +53,21 @@ export function TutorChat({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  async function rateMessage(messageId: string, rating: "HELPFUL" | "UNHELPFUL") {
+  async function rateMessage(
+    messageId: string,
+    rating: "HELPFUL" | "UNHELPFUL",
+    feedback?: string,
+  ) {
     if (messageId.startsWith("local-")) return;
     setMessages((prev) =>
       prev.map((msg) => (msg.id === messageId ? { ...msg, rating } : msg)),
     );
+    setFeedbackPopover(null);
+    setFeedbackText("");
     try {
       await clientFetch(`/tutor/messages/${messageId}/rate`, {
         method: "POST",
-        body: JSON.stringify({ rating }),
+        body: JSON.stringify({ rating, ...(feedback ? { feedbackText: feedback } : {}) }),
       });
     } catch {
       // silent fallback
@@ -161,18 +170,67 @@ export function TutorChat({
                         >
                           <ThumbsUp className="size-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => rateMessage(m.id, "UNHELPFUL")}
-                          className={cn(
-                            "rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                            m.rating === "UNHELPFUL" && "bg-red-50 text-red-500 dark:bg-red-950/50",
+                        {/* Thumbs-Down with optional feedback popover */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (m.rating === "UNHELPFUL") return;
+                              setFeedbackPopover(feedbackPopover === m.id ? null : m.id);
+                              setFeedbackText("");
+                            }}
+                            className={cn(
+                              "rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                              m.rating === "UNHELPFUL" && "bg-red-50 text-red-500 dark:bg-red-950/50",
+                            )}
+                            title="Unhelpful"
+                            aria-label="Unhelpful"
+                          >
+                            <ThumbsDown className="size-3.5" />
+                          </button>
+                          {feedbackPopover === m.id && (
+                            <div className="absolute bottom-8 right-0 z-20 w-64 rounded-xl border border-border bg-card p-3 shadow-lg">
+                              <div className="mb-2 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                                  <MessageSquare className="size-3.5" />
+                                  What went wrong? (optional)
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => { setFeedbackPopover(null); setFeedbackText(""); }}
+                                  className="text-muted-foreground hover:text-foreground"
+                                  aria-label="Close feedback"
+                                >
+                                  <X className="size-3.5" />
+                                </button>
+                              </div>
+                              <textarea
+                                className="w-full resize-none rounded-lg border border-input bg-background p-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                                rows={2}
+                                placeholder="e.g. Answer was off-topic…"
+                                value={feedbackText}
+                                onChange={(e) => setFeedbackText(e.target.value)}
+                                autoFocus
+                              />
+                              <div className="mt-2 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => rateMessage(m.id, "UNHELPFUL", feedbackText || undefined)}
+                                  className="flex-1 rounded-lg bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-600"
+                                >
+                                  Submit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => rateMessage(m.id, "UNHELPFUL")}
+                                  className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+                                >
+                                  Skip
+                                </button>
+                              </div>
+                            </div>
                           )}
-                          title="Unhelpful"
-                          aria-label="Unhelpful"
-                        >
-                          <ThumbsDown className="size-3.5" />
-                        </button>
+                        </div>
                       </div>
                     )}
                   </div>
