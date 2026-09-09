@@ -10,7 +10,10 @@ const nextConfig: NextConfig = {
     return [{ source: "/api/:path*", destination: `${apiOrigin}/:path*` }];
   },
   images: {
-    remotePatterns: [{ protocol: "http", hostname: "localhost" }],
+    remotePatterns: [
+      { protocol: "http", hostname: "localhost" },
+      { protocol: "https", hostname: "*.onrender.com" },
+    ],
   },
 };
 
