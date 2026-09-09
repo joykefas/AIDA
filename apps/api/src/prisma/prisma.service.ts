@@ -8,7 +8,17 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
-    const rawUrl = process.env.DATABASE_URL ?? '';
+    let rawUrl = (process.env.DATABASE_URL ?? '').trim();
+    if (rawUrl.startsWith('DATABASE_URL=')) {
+      rawUrl = rawUrl.slice('DATABASE_URL='.length).trim();
+    }
+    if (
+      (rawUrl.startsWith('"') && rawUrl.endsWith('"')) ||
+      (rawUrl.startsWith("'") && rawUrl.endsWith("'"))
+    ) {
+      rawUrl = rawUrl.slice(1, -1).trim();
+    }
+
     const isCloudDb = Boolean(
       rawUrl.includes('sslmode=') ||
       rawUrl.includes('aivencloud.com') ||
