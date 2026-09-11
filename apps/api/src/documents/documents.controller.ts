@@ -29,13 +29,14 @@ export class DocumentsController {
       fileFilter: (_req, file, callback) => {
         if (
           file.mimetype === 'application/pdf' ||
+          file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
           file.mimetype.startsWith('audio/')
         ) {
           callback(null, true);
         } else {
           callback(
             new BadRequestException(
-              `Unsupported file format: ${file.mimetype}. Allowed formats: PDF and audio.`,
+              `Unsupported file format: ${file.mimetype}. Allowed formats: PDF, DOCX, and audio.`,
             ),
             false,
           );

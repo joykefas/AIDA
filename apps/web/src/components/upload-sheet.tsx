@@ -14,7 +14,7 @@ import { DocType, ProcessingStatus, type DocumentDetail } from "@aida/shared";
 type Mode = DocType;
 
 const MODES: { value: Mode; label: string; icon: typeof FileText; hint: string }[] = [
-  { value: DocType.PDF, label: "File", icon: FileText, hint: "PDF, up to 50MB" },
+  { value: DocType.PDF, label: "File", icon: FileText, hint: "PDF or DOCX, up to 50MB" },
   { value: DocType.AUDIO, label: "Record", icon: Mic, hint: "Lecture or voice note" },
   { value: DocType.YOUTUBE, label: "YouTube", icon: Link2, hint: "Paste a link" },
   { value: DocType.TEXT, label: "Type", icon: Type, hint: "Your own notes" },
@@ -82,7 +82,11 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
     setError(null);
     try {
       const form = new FormData();
-      form.append("type", mode);
+      let typeToSend = mode;
+      if (mode === DocType.PDF && file?.name.endsWith('.docx')) {
+        typeToSend = DocType.DOCX;
+      }
+      form.append("type", typeToSend);
       if (title) form.append("title", title);
       if (mode === DocType.YOUTUBE) form.append("sourceUrl", sourceUrl);
       if (mode === DocType.TEXT) form.append("textContent", textContent);
@@ -308,7 +312,7 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
           <input
             ref={fileInputRef}
             type="file"
-            accept="application/pdf"
+            accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
             className="hidden"
             onChange={(e) => handleSelectedFile(e.target.files?.[0] ?? null)}
           />
