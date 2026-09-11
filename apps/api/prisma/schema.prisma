@@ -13,6 +13,7 @@ enum DocType {
   AUDIO
   YOUTUBE
   TEXT
+  DOCX
 }
 
 enum ProcessingStatus {

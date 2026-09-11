@@ -51,6 +51,7 @@ export class LiveLlmProvider extends LlmProvider {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
+      max_tokens: 8192,
     };
 
     if (isJson) {
