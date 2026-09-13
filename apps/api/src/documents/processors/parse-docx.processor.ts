@@ -4,10 +4,7 @@ import * as mammoth from 'mammoth';
 import { StorageProvider } from '../../providers/storage.provider';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IngestionService } from '../ingestion.service';
-import {
-  QUEUE_PARSE_DOCX,
-  DocumentJobData,
-} from '../../queue/queue.constants';
+import { QUEUE_PARSE_DOCX, DocumentJobData } from '../../queue/queue.constants';
 
 @Processor(QUEUE_PARSE_DOCX)
 export class ParseDocxProcessor extends WorkerHost {
@@ -33,9 +30,11 @@ export class ParseDocxProcessor extends WorkerHost {
       }
 
       const fileBuffer = await this.storage.download(document.storageKey);
-      
-      const { value: text } = await mammoth.extractRawText({ buffer: fileBuffer });
-      
+
+      const { value: text } = await mammoth.extractRawText({
+        buffer: fileBuffer,
+      });
+
       if (!text || text.trim().length === 0) {
         throw new Error('No text could be extracted from DOCX');
       }
