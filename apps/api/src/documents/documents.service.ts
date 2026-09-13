@@ -14,6 +14,7 @@ import { UploadDocumentDto } from './dto/upload-document.dto';
 import { toTopicSummary } from './topic.mapper';
 import {
   QUEUE_PARSE_PDF,
+  QUEUE_PARSE_DOCX,
   QUEUE_TRANSCRIBE_AUDIO,
   QUEUE_FETCH_YOUTUBE_TRANSCRIPT,
   QUEUE_GENERATE_EMBEDDINGS,
@@ -25,6 +26,7 @@ export class DocumentsService {
     private prisma: PrismaService,
     private storage: StorageProvider,
     @InjectQueue(QUEUE_PARSE_PDF) private parsePdfQueue: Queue,
+    @InjectQueue(QUEUE_PARSE_DOCX) private parseDocxQueue: Queue,
     @InjectQueue(QUEUE_TRANSCRIBE_AUDIO) private transcribeQueue: Queue,
     @InjectQueue(QUEUE_FETCH_YOUTUBE_TRANSCRIPT) private youtubeQueue: Queue,
     @InjectQueue(QUEUE_GENERATE_EMBEDDINGS) private embeddingsQueue: Queue,
@@ -69,6 +71,9 @@ export class DocumentsService {
     switch (type) {
       case DocType.PDF:
         await this.parsePdfQueue.add('parse', jobData);
+        break;
+      case DocType.DOCX:
+        await this.parseDocxQueue.add('parse', jobData);
         break;
       case DocType.AUDIO:
         await this.transcribeQueue.add('transcribe', jobData);

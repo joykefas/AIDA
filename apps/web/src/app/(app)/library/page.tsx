@@ -6,6 +6,7 @@ import { DocType, type DocumentListItem } from "@aida/shared";
 
 const TYPE_ICON: Record<DocType, typeof FileText> = {
   [DocType.PDF]: FileText,
+  [DocType.DOCX]: FileText,
   [DocType.AUDIO]: Mic,
   [DocType.YOUTUBE]: Link2,
   [DocType.TEXT]: Type,

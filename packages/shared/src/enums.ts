@@ -3,6 +3,7 @@ export enum DocType {
   AUDIO = "AUDIO",
   YOUTUBE = "YOUTUBE",
   TEXT = "TEXT",
+  DOCX = "DOCX",
 }
 
 export enum ProcessingStatus {
