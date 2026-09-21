@@ -1,22 +1,266 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { LearningStyle } from '@aida/shared';
+import { LearningStyle, NoteSection, MindMapData } from '@aida/shared';
 import {
   LlmProvider,
   GeneratedContent,
+  GeneratedTopic,
   TutorAnswerInput,
   TutorAnswerOutput,
   GradeWrittenInput,
   GradeWrittenOutput,
 } from '../llm.provider';
 
-function stripMarkdownCodeFence(text: string): string {
-  const trimmed = text.trim();
-  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return match ? match[1].trim() : trimmed;
+function cleanJsonResponse(text: string): string {
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  const match = cleaned.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (match) {
+    cleaned = match[1].trim();
+  } else {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+    }
+  }
+  return cleaned;
+}
+
+function toSafeString(val: unknown): string {
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean')
+    return val.toString();
+  return '';
+}
+
+function normalizeQuizQuestions(
+  rawQuestions: unknown,
+): GeneratedTopic['quizQuestions'] {
+  if (!Array.isArray(rawQuestions)) return [];
+  const list: unknown[] = rawQuestions;
+  const result: GeneratedTopic['quizQuestions'] = [];
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    if (!item || typeof item !== 'object') continue;
+    const q = item as Record<string, unknown>;
+    const prompt =
+      typeof q.prompt === 'string' && q.prompt.trim()
+        ? q.prompt.trim()
+        : typeof q.question === 'string' && q.question.trim()
+          ? q.question.trim()
+          : '';
+    if (!prompt) continue;
+
+    let options: { id: string; text: string }[] | undefined = undefined;
+    const rawOptions = q.options ?? q.answers;
+    if (Array.isArray(rawOptions) && rawOptions.length > 0) {
+      const optList: unknown[] = rawOptions;
+      options = optList.map((opt, optIdx) => {
+        if (typeof opt === 'string') {
+          return { id: String.fromCharCode(97 + optIdx), text: opt };
+        }
+        if (opt && typeof opt === 'object') {
+          const optObj = opt as Record<string, unknown>;
+          return {
+            id:
+              typeof optObj.id === 'string'
+                ? optObj.id
+                : String.fromCharCode(97 + optIdx),
+            text:
+              typeof optObj.text === 'string'
+                ? optObj.text
+                : toSafeString(optObj.text),
+          };
+        }
+        return {
+          id: String.fromCharCode(97 + optIdx),
+          text: toSafeString(opt),
+        };
+      });
+    }
+
+    const type: 'MCQ' | 'WRITTEN' =
+      q.type === 'WRITTEN' || (!options && q.type !== 'MCQ')
+        ? 'WRITTEN'
+        : 'MCQ';
+
+    const correctAnswer =
+      typeof q.correctAnswer === 'string'
+        ? q.correctAnswer
+        : typeof q.answer === 'string'
+          ? q.answer
+          : undefined;
+
+    result.push({
+      type,
+      prompt,
+      options,
+      correctAnswer,
+    });
+  }
+  return result;
+}
+
+function normalizeNotes(rawNotes: unknown): NoteSection[] {
+  if (!Array.isArray(rawNotes)) return [];
+  const list: unknown[] = rawNotes;
+  const result: NoteSection[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    if (typeof item === 'string') {
+      result.push({
+        heading: `Key Point ${i + 1}`,
+        anchor: `point-${i + 1}`,
+        bullets: [item],
+      });
+    } else if (item && typeof item === 'object') {
+      const n = item as Record<string, unknown>;
+      const heading =
+        typeof n.heading === 'string' ? n.heading : `Section ${i + 1}`;
+      const anchor =
+        typeof n.anchor === 'string' ? n.anchor : `section-${i + 1}`;
+      const rawBullets: unknown[] = Array.isArray(n.bullets) ? n.bullets : [];
+      const bullets = rawBullets.map((b) =>
+        typeof b === 'string' ? b : toSafeString(b),
+      );
+      result.push({ heading, anchor, bullets });
+    }
+  }
+  return result;
+}
+
+function normalizeMindMap(rawMindMap: unknown): MindMapData {
+  if (!rawMindMap || typeof rawMindMap !== 'object') {
+    return { nodes: [], edges: [] };
+  }
+  const mm = rawMindMap as Record<string, unknown>;
+  const rawNodes: unknown[] = Array.isArray(mm.nodes) ? mm.nodes : [];
+  const nodes = rawNodes.map((item, idx) => {
+    if (typeof item === 'string') {
+      return { id: `node-${idx + 1}`, label: item, noteAnchor: '' };
+    }
+    if (item && typeof item === 'object') {
+      const n = item as Record<string, unknown>;
+      return {
+        id: typeof n.id === 'string' ? n.id : `node-${idx + 1}`,
+        label:
+          typeof n.label === 'string'
+            ? n.label
+            : typeof n.name === 'string'
+              ? n.name
+              : `Node ${idx + 1}`,
+        noteAnchor: typeof n.noteAnchor === 'string' ? n.noteAnchor : '',
+      };
+    }
+    return { id: `node-${idx + 1}`, label: `Node ${idx + 1}`, noteAnchor: '' };
+  });
+
+  const rawEdges: unknown[] = Array.isArray(mm.edges) ? mm.edges : [];
+  const edges = rawEdges
+    .map((item) => {
+      if (item && typeof item === 'object') {
+        const e = item as Record<string, unknown>;
+        return {
+          source:
+            typeof e.source === 'string'
+              ? e.source
+              : typeof e.from === 'string'
+                ? e.from
+                : '',
+          target:
+            typeof e.target === 'string'
+              ? e.target
+              : typeof e.to === 'string'
+                ? e.to
+                : '',
+          label: typeof e.label === 'string' ? e.label : undefined,
+        };
+      }
+      return { source: '', target: '' };
+    })
+    .filter((e) => e.source && e.target);
+
+  return { nodes, edges };
+}
+
+function normalizeGeneratedContent(
+  raw: unknown,
+  fallbackTitle: string,
+): GeneratedContent {
+  const parsed = (raw && typeof raw === 'object' ? raw : {}) as Record<
+    string,
+    unknown
+  >;
+
+  const rootSummary = typeof parsed.summary === 'string' ? parsed.summary : '';
+  const rootNotes = normalizeNotes(parsed.notes);
+  const rootMindMap = normalizeMindMap(parsed.mindMap);
+  const rootQuiz = normalizeQuizQuestions(parsed.quizQuestions);
+
+  let topics: GeneratedTopic[] = [];
+
+  if (Array.isArray(parsed.topics) && parsed.topics.length > 0) {
+    const rawTopicList: unknown[] = parsed.topics;
+    topics = rawTopicList.map((item, idx) => {
+      const t = (item && typeof item === 'object' ? item : {}) as Record<
+        string,
+        unknown
+      >;
+      const title =
+        typeof t.title === 'string' && t.title.trim()
+          ? t.title.trim()
+          : idx === 0
+            ? fallbackTitle
+            : `Topic ${idx + 1}`;
+      const summary = typeof t.summary === 'string' ? t.summary : rootSummary;
+      const notes = normalizeNotes(t.notes);
+      const mindMap = normalizeMindMap(t.mindMap);
+      let quizQuestions = normalizeQuizQuestions(t.quizQuestions);
+
+      // If topic has no questions but root does, share root questions
+      if (quizQuestions.length === 0 && idx === 0 && rootQuiz.length > 0) {
+        quizQuestions = rootQuiz;
+      }
+
+      return {
+        title,
+        summary,
+        notes: notes.length > 0 ? notes : idx === 0 ? rootNotes : [],
+        mindMap:
+          mindMap.nodes.length > 0
+            ? mindMap
+            : idx === 0
+              ? rootMindMap
+              : { nodes: [], edges: [] },
+        quizQuestions,
+      };
+    });
+  } else {
+    topics = [
+      {
+        title: fallbackTitle,
+        summary: rootSummary,
+        notes: rootNotes,
+        mindMap: rootMindMap,
+        quizQuestions: rootQuiz,
+      },
+    ];
+  }
+
+  const primary = topics[0];
+  const allQuiz =
+    rootQuiz.length > 0 ? rootQuiz : topics.flatMap((t) => t.quizQuestions);
+
+  return {
+    topics,
+    summary: primary.summary || rootSummary,
+    notes: primary.notes.length > 0 ? primary.notes : rootNotes,
+    mindMap: primary.mindMap.nodes.length > 0 ? primary.mindMap : rootMindMap,
+    quizQuestions: allQuiz,
+  };
 }
 
 /**
- * Primary: Groq API (llama-3.3-70b-versatile).
+ * Primary: Groq API (openai/gpt-oss-120b).
  * Backup: Cloudflare Workers AI (@cf/meta/llama-3.3-70b-instruct-fp8-fast) with automatic runtime failover.
  */
 @Injectable()
@@ -26,7 +270,7 @@ export class LiveLlmProvider extends LlmProvider {
   private readonly groqApiKey =
     process.env.GROQ_API_KEY ?? process.env.LLM_API_KEY;
   private readonly groqModel =
-    process.env.GROQ_LLM_MODEL ?? 'llama-3.3-70b-versatile';
+    process.env.GROQ_LLM_MODEL ?? 'openai/gpt-oss-120b';
 
   private readonly cfAccountId =
     process.env.CLOUDFLARE_ACCOUNT_ID ?? process.env.CF_ACCOUNT_ID;
@@ -162,21 +406,9 @@ export class LiveLlmProvider extends LlmProvider {
       `Title: ${input.title}\n\nMaterial:\n${input.rawText}`,
       true,
     );
-    const cleaned = stripMarkdownCodeFence(content);
-    const parsed = JSON.parse(cleaned) as GeneratedContent;
-    // Normalise: if model returned legacy flat shape, promote it into topics array
-    if (!parsed.topics && parsed.summary) {
-      parsed.topics = [
-        {
-          title: input.title,
-          summary: parsed.summary,
-          notes: parsed.notes ?? [],
-          mindMap: parsed.mindMap ?? { nodes: [], edges: [] },
-          quizQuestions: parsed.quizQuestions ?? [],
-        },
-      ];
-    }
-    return parsed;
+    const cleaned = cleanJsonResponse(content);
+    const parsed = JSON.parse(cleaned) as unknown;
+    return normalizeGeneratedContent(parsed, input.title);
   }
 
   async answerTutorQuestion(
@@ -213,7 +445,7 @@ export class LiveLlmProvider extends LlmProvider {
       `Prompt: ${input.prompt}\nReference answer: ${input.correctAnswer ?? '(none provided)'}\nStudent answer: ${input.studentAnswer}`,
       true,
     );
-    const cleaned = stripMarkdownCodeFence(content);
+    const cleaned = cleanJsonResponse(content);
     return JSON.parse(cleaned) as GradeWrittenOutput;
   }
 }

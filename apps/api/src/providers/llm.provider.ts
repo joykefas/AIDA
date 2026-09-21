@@ -68,7 +68,7 @@ export interface GradeWrittenOutput {
  * DI token + contract for the LLM used for note/quiz generation, the RAG tutor,
  * and written-response grading. `MockLlmProvider` implements this with
  * deterministic canned output (AI_PROVIDER_MODE=mock, the default); the live
- * implementation (`LiveLlmProvider`) calls Groq API (llama-3.3-70b-versatile,
+ * implementation (`LiveLlmProvider`) calls Groq API (openai/gpt-oss-120b,
  * primary) with automatic failover to Cloudflare Workers AI
  * (@cf/meta/llama-3.3-70b-instruct-fp8-fast, backup). Route/service code
  * depends only on this abstract class, so switching modes never touches call sites.
