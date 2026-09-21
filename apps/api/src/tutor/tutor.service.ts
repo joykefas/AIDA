@@ -49,9 +49,31 @@ export class TutorService {
       topicIds = topics.map((t) => t.id);
     }
 
+    const recentMessages = await this.prisma.tutorMessage.findMany({
+      where: { userId, topicId: dto.topicId ?? null },
+      orderBy: { createdAt: 'desc' },
+      take: 4,
+    });
+    const history = recentMessages.reverse().map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
+
+    // For short follow-up prompts like "Simplify that" or "Explain more", enrich
+    // the retrieval query with the previous turn so semantic search retrieves the relevant chunks
+    let retrievalQuery = dto.message;
+    if (dto.message.trim().split(/\s+/).length <= 4 && history.length > 0) {
+      const lastUserQuestion = [...history]
+        .reverse()
+        .find((h) => h.role === 'user');
+      if (lastUserQuestion) {
+        retrievalQuery = `${lastUserQuestion.content} ${dto.message}`;
+      }
+    }
+
     const contextChunks =
       topicIds.length > 0
-        ? await this.retrieveContext(dto.message, topicIds)
+        ? await this.retrieveContext(retrievalQuery, topicIds)
         : [];
 
     const { answer } = await this.llm.answerTutorQuestion({
@@ -64,6 +86,7 @@ export class TutorService {
       })),
       learningStyle,
       simplify: Boolean(dto.simplify),
+      history,
     });
 
     await this.prisma.tutorMessage.create({
