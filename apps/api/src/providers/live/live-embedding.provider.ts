@@ -8,6 +8,7 @@ import { EmbeddingProvider, EMBEDDING_DIM } from '../embedding.provider';
 @Injectable()
 export class LiveEmbeddingProvider extends EmbeddingProvider {
   private readonly logger = new Logger(LiveEmbeddingProvider.name);
+  private hasWarnedMissingCredentials = false;
   private readonly baseUrl =
     process.env.EMBEDDING_BASE_URL ?? process.env.LLM_BASE_URL;
   private readonly apiKey =
@@ -24,7 +25,9 @@ export class LiveEmbeddingProvider extends EmbeddingProvider {
     if (texts.length === 0) return [];
     try {
       if (!this.apiKey || !this.baseUrl) {
-        throw new Error('Live embedding credentials not configured');
+        throw new Error(
+          'Live embedding credentials not configured (set EMBEDDING_API_KEY and EMBEDDING_BASE_URL)',
+        );
       }
 
       const res = await fetch(`${this.baseUrl}/embeddings`, {
@@ -52,9 +55,12 @@ export class LiveEmbeddingProvider extends EmbeddingProvider {
         .sort((a, b) => a.index - b.index)
         .map((d) => d.embedding);
     } catch (err) {
-      this.logger.warn(
-        `Live embedding fallback engaged: ${(err as Error).message}`,
-      );
+      if (!this.hasWarnedMissingCredentials) {
+        this.logger.warn(
+          `Live embedding fallback engaged: ${(err as Error).message}. Using deterministic 1536-dim vectors.`,
+        );
+        this.hasWarnedMissingCredentials = true;
+      }
       let seed = 0;
       return texts.map((text) => {
         for (let i = 0; i < text.length; i++)

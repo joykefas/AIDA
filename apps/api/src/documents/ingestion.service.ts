@@ -140,23 +140,51 @@ export class IngestionService {
         where: { id: topic.id },
         data: {
           title: t.title,
-          summary: t.summary,
-          notes: t.notes as unknown as Prisma.InputJsonValue,
-          mindMapJson: t.mindMap as unknown as Prisma.InputJsonValue,
+          summary: t.summary ?? '',
+          notes: (t.notes ?? []) as unknown as Prisma.InputJsonValue,
+          mindMapJson: (t.mindMap ?? {
+            nodes: [],
+            edges: [],
+          }) as unknown as Prisma.InputJsonValue,
         },
       });
 
       await this.prisma.quizQuestion.deleteMany({
         where: { topicId: topic.id },
       });
-      for (const q of t.quizQuestions) {
+
+      const questionsToSave = Array.isArray(t.quizQuestions)
+        ? t.quizQuestions
+        : Array.isArray(generated.quizQuestions)
+          ? generated.quizQuestions
+          : [];
+
+      for (const q of questionsToSave) {
+        if (!q) continue;
+        const prompt =
+          typeof q.prompt === 'string' && q.prompt.trim()
+            ? q.prompt.trim()
+            : typeof (q as Record<string, unknown>).question === 'string'
+              ? ((q as Record<string, unknown>).question as string).trim()
+              : '';
+        if (!prompt) continue;
+
+        let options = q.options ?? null;
+        const rawAnswers = (q as Record<string, unknown>).answers;
+        if (!options && Array.isArray(rawAnswers)) {
+          options = rawAnswers.map((ans: unknown, optIdx: number) => ({
+            id: String.fromCharCode(97 + optIdx),
+            text: typeof ans === 'string' ? ans : String(ans),
+          }));
+        }
+
         await this.prisma.quizQuestion.create({
           data: {
             topicId: topic.id,
-            type: q.type,
-            prompt: q.prompt,
-            options: (q.options ?? null) as unknown as Prisma.InputJsonValue,
-            correctAnswer: q.correctAnswer,
+            type: q.type === 'WRITTEN' ? 'WRITTEN' : 'MCQ',
+            prompt,
+            options: (options ?? null) as unknown as Prisma.InputJsonValue,
+            correctAnswer: q.correctAnswer ?? '',
           },
         });
       }

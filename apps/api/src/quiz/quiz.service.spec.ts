@@ -101,6 +101,59 @@ describe('QuizService', () => {
       expect(result).toHaveLength(1);
       expect(prisma.quizQuestion.create).toHaveBeenCalled();
     });
+
+    it('should safely handle LLM responses that return topics array without root quizQuestions', async () => {
+      prisma.topic.findFirst.mockResolvedValue({
+        id: 'topic-1',
+        title: 'Photosynthesis',
+        summary: 'Overview',
+      });
+
+      llm.generateContent.mockResolvedValue({
+        topics: [
+          {
+            title: 'Light Reactions',
+            summary: 'Summary',
+            notes: [],
+            mindMap: { nodes: [], edges: [] },
+            quizQuestions: [
+              {
+                question: 'What is produced?',
+                answers: ['Oxygen', 'Carbon'],
+                correctAnswer: 'Oxygen',
+              },
+            ],
+          },
+        ],
+      });
+
+      prisma.quizQuestion.create.mockResolvedValue({
+        id: 'new-q-2',
+        topicId: 'topic-1',
+        type: QuestionType.MCQ,
+        prompt: 'What is produced?',
+        options: [
+          { id: 'a', text: 'Oxygen' },
+          { id: 'b', text: 'Carbon' },
+        ],
+        correctAnswer: 'Oxygen',
+      });
+
+      const result = await service.generateMore('user-1', 'topic-1');
+      expect(result).toHaveLength(1);
+      expect(prisma.quizQuestion.create).toHaveBeenCalledWith({
+        data: {
+          topicId: 'topic-1',
+          type: 'MCQ',
+          prompt: 'What is produced?',
+          options: [
+            { id: 'a', text: 'Oxygen' },
+            { id: 'b', text: 'Carbon' },
+          ],
+          correctAnswer: 'Oxygen',
+        },
+      });
+    });
   });
 
   describe('attempt (MCQ Scoring)', () => {

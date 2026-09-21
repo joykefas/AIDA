@@ -54,18 +54,38 @@ export class QuizService {
       rawText: topic.summary || topic.title,
     });
 
+    const quizQuestions =
+      Array.isArray(generated.quizQuestions) &&
+      generated.quizQuestions.length > 0
+        ? generated.quizQuestions
+        : (generated.topics ?? []).flatMap((t) => t.quizQuestions ?? []);
+
     const created = await Promise.all(
-      generated.quizQuestions.map((q) =>
-        this.prisma.quizQuestion.create({
+      quizQuestions.map((q) => {
+        const prompt =
+          typeof q.prompt === 'string' && q.prompt.trim()
+            ? q.prompt.trim()
+            : typeof (q as Record<string, unknown>).question === 'string'
+              ? ((q as Record<string, unknown>).question as string).trim()
+              : '';
+        let options = q.options ?? null;
+        const rawAnswers = (q as Record<string, unknown>).answers;
+        if (!options && Array.isArray(rawAnswers)) {
+          options = rawAnswers.map((ans: unknown, optIdx: number) => ({
+            id: String.fromCharCode(97 + optIdx),
+            text: typeof ans === 'string' ? ans : String(ans),
+          }));
+        }
+        return this.prisma.quizQuestion.create({
           data: {
             topicId: topic.id,
-            type: q.type,
-            prompt: q.prompt,
-            options: (q.options ?? null) as unknown as Prisma.InputJsonValue,
-            correctAnswer: q.correctAnswer,
+            type: q.type === 'WRITTEN' ? 'WRITTEN' : 'MCQ',
+            prompt,
+            options: (options ?? null) as unknown as Prisma.InputJsonValue,
+            correctAnswer: q.correctAnswer ?? '',
           },
-        }),
-      ),
+        });
+      }),
     );
 
     return created.map((q) => ({
