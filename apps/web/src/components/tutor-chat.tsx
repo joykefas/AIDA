@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Send, Sparkles, BookOpen, ThumbsUp, ThumbsDown, X, MessageSquare } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { clientFetch } from "@/lib/api-client";
 import type { TutorChatMessage } from "@aida/shared";
@@ -135,13 +137,63 @@ export function TutorChat({
               <div key={m.id} className={cn("flex flex-col gap-1", m.role === "user" && "items-end")}>
                 <div
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm",
+                    "max-w-[88%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                     m.role === "user"
-                      ? "bg-brand-600 text-white"
-                      : "bg-muted text-foreground",
+                      ? "bg-brand-600 text-white whitespace-pre-wrap"
+                      : "border border-border/60 bg-muted/80 text-foreground shadow-2xs",
                   )}
                 >
-                  {m.content}
+                  {m.role === "user" ? (
+                    m.content
+                  ) : (
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-foreground">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <p className="mb-2.5 last:mb-0 leading-relaxed text-pretty">{children}</p>,
+                          strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                          em: ({ children }) => <em className="italic">{children}</em>,
+                          ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+                          ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+                          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                          h1: ({ children }) => <h3 className="mt-3 mb-1.5 text-base font-semibold text-foreground">{children}</h3>,
+                          h2: ({ children }) => <h4 className="mt-2.5 mb-1 text-sm font-semibold text-foreground">{children}</h4>,
+                          h3: ({ children }) => <h5 className="mt-2 mb-1 text-sm font-semibold text-foreground">{children}</h5>,
+                          code: ({ children, className }) => {
+                            const isBlock = className?.includes("language-");
+                            return isBlock ? (
+                              <code className="font-mono text-xs">{children}</code>
+                            ) : (
+                              <code className="rounded bg-muted-foreground/15 px-1 py-0.5 font-mono text-xs text-foreground">
+                                {children}
+                              </code>
+                            );
+                          },
+                          pre: ({ children }) => (
+                            <pre className="my-2 overflow-x-auto rounded-xl border border-border bg-card/90 p-3 font-mono text-xs leading-normal text-foreground">
+                              {children}
+                            </pre>
+                          ),
+                          table: ({ children }) => (
+                            <div className="my-2 overflow-x-auto rounded-xl border border-border">
+                              <table className="w-full text-left text-xs">{children}</table>
+                            </div>
+                          ),
+                          thead: ({ children }) => <thead className="border-b border-border bg-muted/50">{children}</thead>,
+                          tbody: ({ children }) => <tbody className="divide-y divide-border">{children}</tbody>,
+                          th: ({ children }) => <th className="px-3 py-2 font-semibold text-foreground">{children}</th>,
+                          td: ({ children }) => <td className="px-3 py-1.5">{children}</td>,
+                          blockquote: ({ children }) => (
+                            <blockquote className="my-2 border-l-2 border-brand-500 pl-3 italic text-muted-foreground">
+                              {children}
+                            </blockquote>
+                          ),
+                        }}
+                      >
+                        {m.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
                 {m.role === "assistant" && (
                   <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">

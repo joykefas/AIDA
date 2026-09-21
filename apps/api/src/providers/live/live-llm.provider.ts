@@ -425,21 +425,54 @@ export class LiveLlmProvider extends LlmProvider {
     input: TutorAnswerInput,
   ): Promise<TutorAnswerOutput> {
     const system =
-      "You are a study tutor. Answer strictly grounded in the provided context chunks from the student's own material. If the answer isn't in the context, say so rather than guessing.";
+      "You are AIDA's personal AI study tutor. Answer strictly grounded in the provided context chunks from the student's own material. If the answer isn't in the context, say so rather than guessing. Format your response cleanly using GitHub-flavored Markdown: use bolding for key terms, clean bullet points or numbered lists, and Markdown tables when organizing structured data. Never output raw ASCII-art box drawings or character grids with '+' and '-' lines.";
+
     const context = input.contextChunks
       .map((c) => `[${c.topicTitle} / ${c.noteAnchor}] ${c.text}`)
       .join('\n\n');
-    const styleNote = input.learningStyle
-      ? `Explain in a style suited to: ${input.learningStyle}.`
-      : '';
+
+    let styleNote = '';
+    if (input.learningStyle) {
+      if (input.learningStyle === LearningStyle.DIAGRAMS) {
+        styleNote =
+          'The student learns best with visual structure: present explanations using structured hierarchical outlines, step-by-step numbered flows, and clean Markdown comparison tables (do NOT draw ASCII-art boxes).';
+      } else if (input.learningStyle === LearningStyle.ANALOGIES) {
+        styleNote =
+          'The student learns best with analogies: use intuitive real-world comparisons to clarify abstract ideas.';
+      } else if (input.learningStyle === LearningStyle.STORIES) {
+        styleNote =
+          'The student learns best through stories: frame key concepts in a concise narrative scenario.';
+      } else if (input.learningStyle === LearningStyle.FORMULAS) {
+        styleNote =
+          'The student learns best with formulas: provide compact, formal, step-by-step principles and relationships.';
+      } else if (input.learningStyle === LearningStyle.AUDIO) {
+        styleNote =
+          'The student learns best through audio: explain in a natural, conversational, spoken-word cadence.';
+      }
+    }
+
     const simplifyNote = input.simplify
-      ? 'Simplify further than a typical explanation.'
+      ? 'Simplify the explanation significantly: focus only on the absolute core takeaway in plain, crystal-clear language (ELIF / explain-like-I-am-12 style).'
       : '';
-    const answer = await this.chatComplete(
-      `${system} ${styleNote} ${simplifyNote}`,
-      `Context:\n${context}\n\nQuestion: ${input.question}`,
+
+    const historySection =
+      input.history && input.history.length > 0
+        ? `\n\nRecent Conversation History:\n${input.history
+            .map(
+              (h) =>
+                `${h.role === 'user' ? 'Student' : 'Tutor'}: ${h.content.slice(0, 400)}`,
+            )
+            .join('\n')}`
+        : '';
+
+    const prompt = `Context:\n${context}${historySection}\n\nStudent Question: ${input.question}`;
+
+    const rawAnswer = await this.chatComplete(
+      [system, styleNote, simplifyNote].filter(Boolean).join(' '),
+      prompt,
       false,
     );
+    const answer = rawAnswer.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
     return { answer };
   }
 

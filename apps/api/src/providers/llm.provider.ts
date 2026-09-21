@@ -46,6 +46,7 @@ export interface TutorAnswerInput {
   }[];
   learningStyle: LearningStyle | null;
   simplify: boolean;
+  history?: { role: 'user' | 'assistant'; content: string }[];
 }
 
 export interface TutorAnswerOutput {
