@@ -1,6 +1,7 @@
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { DocumentStatusBadge } from "@/components/document-status-badge";
 import { DocumentDetailTabs } from "@/components/document-detail-tabs";
+import { DeleteDocumentButton } from "@/components/delete-document-button";
 import { serverFetch } from "@/lib/api";
 import { ProcessingStatus, type DocumentDetail, type TopicDetail } from "@aida/shared";
 
@@ -14,11 +15,19 @@ export default async function DocumentPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="mb-1 flex items-center gap-2">
-          <DocumentStatusBadge status={document.status} />
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <DocumentStatusBadge status={document.status} />
+          </div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">{document.title}</h1>
         </div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">{document.title}</h1>
+        <DeleteDocumentButton
+          documentId={document.id}
+          documentTitle={document.title}
+          variant="button"
+          redirectOnDelete
+        />
       </div>
 
       {document.status === ProcessingStatus.READY && document.topics[0] ? (

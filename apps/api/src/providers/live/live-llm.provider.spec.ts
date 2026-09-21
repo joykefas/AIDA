@@ -123,4 +123,32 @@ I need to generate study notes in JSON format.
     expect(result.topics).toHaveLength(1);
     expect(result.topics![0].title).toBe('Thinking Model Test');
   });
+
+  it('should truncate huge text to fit LLM context limits without crashing', async () => {
+    const hugeText = 'A'.repeat(100_000);
+    const spy = jest
+      .spyOn<any, any>(provider, 'chatComplete')
+      .mockResolvedValue(
+        JSON.stringify({
+          summary: 'Summary of huge book',
+          notes: [],
+          mindMap: { nodes: [], edges: [] },
+          quizQuestions: [],
+        }),
+      );
+
+    const result = await provider.generateContent({
+      title: 'Huge Textbook',
+      rawText: hugeText,
+    });
+
+    expect(result.summary).toBe('Summary of huge book');
+    // Ensure the text passed to chatComplete was truncated under the limit
+    expect(spy).toHaveBeenCalled();
+    const promptArg = spy.mock.calls[0][1] as string;
+    expect(promptArg.length).toBeLessThan(70_000);
+    expect(promptArg).toContain(
+      'content truncated to fit model context limits',
+    );
+  });
 });

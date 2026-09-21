@@ -392,6 +392,16 @@ export class LiveLlmProvider extends LlmProvider {
     rawText: string;
     learningStyle?: LearningStyle | null;
   }): Promise<GeneratedContent> {
+    const maxChars = parseInt(process.env.MAX_LLM_INPUT_CHARS ?? '60000', 10);
+    let material = input.rawText;
+    if (material.length > maxChars) {
+      this.logger.warn(
+        `Material for "${input.title}" exceeds safe LLM context limit (${material.length} chars, ~${Math.round(material.length / 4)} tokens). Truncating to ${maxChars} chars for note generation.`,
+      );
+      const half = Math.floor((maxChars - 100) / 2);
+      material = `${material.slice(0, half)}\n\n[... content truncated to fit model context limits ...]\n\n${material.slice(-half)}`;
+    }
+
     const stylePrompt = input.learningStyle
       ? ` Explain in a style suited to: ${input.learningStyle}.`
       : '';
@@ -403,7 +413,7 @@ export class LiveLlmProvider extends LlmProvider {
       ` Identify 1-5 logical topics/sections from the material and generate separate notes for each.${stylePrompt}`;
     const content = await this.chatComplete(
       system,
-      `Title: ${input.title}\n\nMaterial:\n${input.rawText}`,
+      `Title: ${input.title}\n\nMaterial:\n${material}`,
       true,
     );
     const cleaned = cleanJsonResponse(content);
