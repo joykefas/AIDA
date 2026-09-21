@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { FileText, Mic, Link2, Type, CheckCircle2, Square, Circle } from "lucide-react";
+import { FileText, Mic, Link2, Type, CheckCircle2, Square, Circle, Sparkles, Info } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormError } from "@/components/ui/form-error";
@@ -14,7 +14,7 @@ import { DocType, ProcessingStatus, type DocumentDetail } from "@aida/shared";
 type Mode = DocType;
 
 const MODES: { value: Mode; label: string; icon: typeof FileText; hint: string }[] = [
-  { value: DocType.PDF, label: "File", icon: FileText, hint: "PDF or DOCX, up to 50MB" },
+  { value: DocType.PDF, label: "Document", icon: FileText, hint: "PDF or Word (.docx)" },
   { value: DocType.AUDIO, label: "Record", icon: Mic, hint: "Lecture or voice note" },
   { value: DocType.YOUTUBE, label: "YouTube", icon: Link2, hint: "Paste a link" },
   { value: DocType.TEXT, label: "Type", icon: Type, hint: "Your own notes" },
@@ -83,7 +83,7 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
     try {
       const form = new FormData();
       let typeToSend = mode;
-      if (mode === DocType.PDF && file?.name.endsWith('.docx')) {
+      if (mode === DocType.PDF && file?.name.toLowerCase().endsWith(".docx")) {
         typeToSend = DocType.DOCX;
       }
       form.append("type", typeToSend);
@@ -96,9 +96,15 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
         method: "POST",
         body: form,
       });
-      setStatus("processing");
-      onUploaded?.(result.id);
-      pollUntilDone(result.id);
+
+      if (onUploaded) {
+        setStatus("idle");
+        resetForm();
+        onUploaded(result.id);
+      } else {
+        setStatus("processing");
+        pollUntilDone(result.id);
+      }
     } catch (err) {
       setStatus("error");
       setError(err instanceof ApiClientError ? err.message : "Upload failed. Try again.");
@@ -213,6 +219,33 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
         ))}
       </div>
 
+      <div className="flex items-start gap-2.5 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-muted-foreground">
+        <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
+        <div>
+          <span className="font-semibold text-foreground">Best study results:</span>{" "}
+          {mode === DocType.PDF && (
+            <span>
+              Upload individual chapters, lecture slides, or sections (<strong>5–50 pages</strong>). Accepts <strong>PDF and Word (.docx)</strong> documents. For full textbooks, uploading chapter-by-chapter gives you dedicated mind maps, focused quizzes, and targeted spaced-repetition schedules.
+            </span>
+          )}
+          {mode === DocType.AUDIO && (
+            <span>
+              Lectures or voice notes up to <strong>60 minutes</strong> yield the sharpest transcriptions, concept maps, and quiz questions.
+            </span>
+          )}
+          {mode === DocType.YOUTUBE && (
+            <span>
+              Educational videos between <strong>5 and 60 minutes</strong> provide the best structured notes and practice questions.
+            </span>
+          )}
+          {mode === DocType.TEXT && (
+            <span>
+              Pasting <strong>1,000 to 25,000 words</strong> per unit produces focused mind maps, clear summaries, and high-yield quizzes.
+            </span>
+          )}
+        </div>
+      </div>
+
       <Input
         placeholder="Title (optional)"
         value={title}
@@ -305,21 +338,45 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
       )}
 
       {mode === DocType.PDF && (
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-8 text-center text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/20"
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
-            className="hidden"
-            onChange={(e) => handleSelectedFile(e.target.files?.[0] ?? null)}
-          />
-          {file ? (
-            <span className="font-medium text-foreground">{file.name}</span>
-          ) : (
-            <span>Click to choose a PDF</span>
+        <div className="flex flex-col gap-2">
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-7 text-center text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/20"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
+              className="hidden"
+              onChange={(e) => handleSelectedFile(e.target.files?.[0] ?? null)}
+            />
+            {file ? (
+              <div className="flex flex-col items-center gap-1">
+                <span className="font-medium text-foreground">{file.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {file.name.toLowerCase().endsWith(".docx")
+                    ? "Word Document (.docx)"
+                    : "PDF Document"}{" "}
+                  • {(file.size / (1024 * 1024)).toFixed(2)} MB
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <span className="font-medium text-foreground">Click or drag a file to upload</span>
+                <span className="text-xs text-muted-foreground">
+                  PDF or Word (.docx) • 5–50 pages recommended (up to 50MB)
+                </span>
+              </div>
+            )}
+          </div>
+
+          {file && file.size > 8 * 1024 * 1024 && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+              <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>
+                <strong>Large file detected ({(file.size / (1024 * 1024)).toFixed(1)}MB):</strong> We will sample core concepts across the entire document so note generation succeeds smoothly. For detailed chapter quizzes, consider uploading chapters separately.
+              </span>
+            </div>
           )}
         </div>
       )}
