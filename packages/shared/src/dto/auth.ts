@@ -30,7 +30,7 @@ export interface SetLearningStyleRequest {
 }
 
 export interface UpdateProfileRequest {
-  displayName?: string;
+  displayName?: string | null;
   learningStyle?: LearningStyle;
 }
 

@@ -122,14 +122,16 @@ export default function SettingsPage() {
     setError(null);
     setProfileSaved(false);
     try {
+      const trimmedName = displayName.trim();
       const updated = await clientFetch<UserProfile>("/users/me", {
         method: "PATCH",
         body: JSON.stringify({
-          displayName: displayName.trim(),
+          displayName: trimmedName || null,
           learningStyle: selectedStyle,
         }),
       });
       setProfile(updated);
+      setDisplayName(updated.displayName ?? "");
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
     } catch (err) {
@@ -196,7 +198,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="displayName">Display Name</Label>
+            <Label htmlFor="displayName">Display Name (Optional)</Label>
             <Input
               id="displayName"
               placeholder="e.g. Alex Smith"
