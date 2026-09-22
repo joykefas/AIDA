@@ -188,67 +188,73 @@ export default function SettingsPage() {
 
       {error && <FormError message={error} />}
 
-      <form onSubmit={handleSaveProfile} className="flex flex-col gap-6">
-        <section className="rounded-2xl border border-border bg-card p-6 flex flex-col gap-4">
-          <h2 className="font-heading text-lg font-medium">Profile</h2>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" value={profile?.email ?? ""} disabled className="bg-muted/50" />
-            <p className="text-xs text-muted-foreground">Your account email cannot be changed.</p>
+      <form onSubmit={handleSaveProfile}>
+        <section className="rounded-2xl border border-border bg-card p-6 flex flex-col gap-6">
+          {/* Profile Section */}
+          <div className="flex flex-col gap-4">
+            <h2 className="font-heading text-lg font-medium">Profile</h2>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" value={profile?.email ?? ""} disabled className="bg-muted/50" />
+              <p className="text-xs text-muted-foreground">Your account email cannot be changed.</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="displayName">Display Name (Optional)</Label>
+              <Input
+                id="displayName"
+                placeholder="e.g. Alex Smith"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+              <Shield className="size-4 text-brand-600" />
+              <span>
+                Account Status: {profile?.isMinor ? "Protected Minor Account (COPPA-compliant)" : "Standard Adult Account"}
+              </span>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="displayName">Display Name (Optional)</Label>
-            <Input
-              id="displayName"
-              placeholder="e.g. Alex Smith"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
+          <div className="h-px w-full bg-border" />
+
+          {/* Preferred Learning Style Section */}
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2 className="font-heading text-lg font-medium">Preferred Learning Style</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                The AI Tutor, notes, and quiz feedback will explain concepts using this style.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {LEARNING_STYLES.map(({ value, label, desc, icon: Icon }) => {
+                const selected = selectedStyle === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSelectedStyle(value)}
+                    className={cn(
+                      "flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-all",
+                      selected
+                        ? "border-brand-600 bg-brand-50/50 dark:bg-brand-950/40 ring-2 ring-brand-600/20"
+                        : "border-border hover:border-brand-300 hover:bg-accent/40",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className={cn("size-4", selected ? "text-brand-600" : "text-muted-foreground")} />
+                      <span className="text-sm font-medium">{label}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground">
-            <Shield className="size-4 text-brand-600" />
-            <span>
-              Account Status: {profile?.isMinor ? "Protected Minor Account (COPPA-compliant)" : "Standard Adult Account"}
-            </span>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-border bg-card p-6 flex flex-col gap-4">
-          <div>
-            <h2 className="font-heading text-lg font-medium">Preferred Learning Style</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              The AI Tutor, notes, and quiz feedback will explain concepts using this style.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {LEARNING_STYLES.map(({ value, label, desc, icon: Icon }) => {
-              const selected = selectedStyle === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setSelectedStyle(value)}
-                  className={cn(
-                    "flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-all",
-                    selected
-                      ? "border-brand-600 bg-brand-50/50 dark:bg-brand-950/40 ring-2 ring-brand-600/20"
-                      : "border-border hover:border-brand-300 hover:bg-accent/40",
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <Icon className={cn("size-4", selected ? "text-brand-600" : "text-muted-foreground")} />
-                    <span className="text-sm font-medium">{label}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center justify-between border-t border-border pt-4">
             <Button type="submit" disabled={savingProfile}>
               {savingProfile ? "Saving…" : "Save Changes"}
             </Button>
