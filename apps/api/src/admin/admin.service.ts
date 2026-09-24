@@ -4,8 +4,7 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+
 import * as argon2 from 'argon2';
 import {
   AdminAuditLogItem,
@@ -25,13 +24,6 @@ import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
-import {
-  QUEUE_PARSE_PDF,
-  QUEUE_TRANSCRIBE_AUDIO,
-  QUEUE_FETCH_YOUTUBE_TRANSCRIPT,
-  QUEUE_GENERATE_EMBEDDINGS,
-  QUEUE_GENERATE_CONTENT,
-} from '../queue/queue.constants';
 
 @Injectable()
 export class AdminService implements OnModuleInit {
@@ -40,11 +32,6 @@ export class AdminService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private usersService: UsersService,
-    @InjectQueue(QUEUE_PARSE_PDF) private parsePdfQueue: Queue,
-    @InjectQueue(QUEUE_TRANSCRIBE_AUDIO) private transcribeQueue: Queue,
-    @InjectQueue(QUEUE_FETCH_YOUTUBE_TRANSCRIPT) private youtubeQueue: Queue,
-    @InjectQueue(QUEUE_GENERATE_EMBEDDINGS) private embeddingsQueue: Queue,
-    @InjectQueue(QUEUE_GENERATE_CONTENT) private contentQueue: Queue,
   ) {}
 
   async onModuleInit() {
@@ -130,38 +117,11 @@ export class AdminService implements OnModuleInit {
       this.prisma.quizAttempt.count({ where: { isDisputed: true } }),
     ]);
 
-    // Live Queue Inspection
-    const queues = [
-      this.parsePdfQueue,
-      this.transcribeQueue,
-      this.youtubeQueue,
-      this.embeddingsQueue,
-      this.contentQueue,
-    ];
-
-    let waiting = 0;
-    let active = 0;
-    let failed = 0;
-    let completed = 0;
-
-    for (const q of queues) {
-      try {
-        const counts = await q.getJobCounts(
-          'waiting',
-          'active',
-          'failed',
-          'completed',
-        );
-        waiting += counts.waiting ?? 0;
-        active += counts.active ?? 0;
-        failed += counts.failed ?? 0;
-        completed += counts.completed ?? 0;
-      } catch (err) {
-        this.logger.debug(
-          `Could not query queue counts: ${(err as Error).message}`,
-        );
-      }
-    }
+    // Queue-like counts derived from document processing status in the database
+    const waiting = documentsProcessing; // PENDING
+    const active = 0; // In-memory tasks have no persistent "active" state
+    const failed = documentsFailed;
+    const completed = documentsReady;
 
     // Token and Spend Estimates based on activity
     const estimatedTokensUsed =

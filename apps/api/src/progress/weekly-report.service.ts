@@ -1,37 +1,41 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
-import { PrismaService } from '../../prisma/prisma.service';
-import { EmailProvider } from '../../providers/email.provider';
-import { ProgressService } from '../progress.service';
-import { QUEUE_SEND_WEEKLY_REPORT } from '../../queue/queue.constants';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { PrismaService } from '../prisma/prisma.service';
+import { EmailProvider } from '../providers/email.provider';
+import { ProgressService } from './progress.service';
 import type { WeeklyProgressReport } from '@aida/shared';
 
-@Processor(QUEUE_SEND_WEEKLY_REPORT)
-export class SendWeeklyReportProcessor extends WorkerHost {
+@Injectable()
+export class WeeklyReportService {
+  private readonly logger = new Logger(WeeklyReportService.name);
+
   constructor(
     private prisma: PrismaService,
     private progressService: ProgressService,
     private email: EmailProvider,
-  ) {
-    super();
-  }
+  ) {}
 
-  async process(job: Job) {
-    void job;
+  /**
+   * Runs every Monday at 08:00 UTC.
+   * Override the schedule via WEEKLY_REPORT_CRON env var (standard 5-field cron, UTC).
+   * Example for 09:00 WAT (UTC+1): WEEKLY_REPORT_CRON="0 8 * * 1"
+   */
+  @Cron(process.env.WEEKLY_REPORT_CRON ?? CronExpression.EVERY_WEEK)
+  async sendWeeklyReports(): Promise<void> {
+    this.logger.log('[WeeklyReport] Starting weekly report batch...');
     const BATCH_SIZE = 50;
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
     let cursor: string | undefined;
     let processedCount = 0;
 
-    // Cursor-paginated batching to avoid loading the entire user table into memory
     let hasMore = true;
     while (hasMore) {
       const users = await this.prisma.user.findMany({
         take: BATCH_SIZE,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
         orderBy: { id: 'asc' },
-        where: { emailOptOut: false }, // Skip users who have unsubscribed
+        where: { emailOptOut: false },
         select: { id: true, email: true, displayName: true },
       });
 
@@ -54,9 +58,8 @@ export class SendWeeklyReportProcessor extends WorkerHost {
           });
           processedCount++;
         } catch (err) {
-          // Log per-user failure but continue to the next user
           const message = err instanceof Error ? err.message : String(err);
-          console.error(
+          this.logger.error(
             `[WeeklyReport] Failed to send report to ${user.email}: ${message}`,
           );
         }
@@ -67,7 +70,7 @@ export class SendWeeklyReportProcessor extends WorkerHost {
       }
     }
 
-    console.log(`[WeeklyReport] Sent reports to ${processedCount} users.`);
+    this.logger.log(`[WeeklyReport] Sent reports to ${processedCount} users.`);
   }
 
   private renderReportHtml(

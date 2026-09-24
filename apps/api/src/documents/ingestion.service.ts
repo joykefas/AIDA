@@ -1,19 +1,39 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
-import { ProcessingStatus, LearningStyle } from '@aida/shared';
+import { DocType, ProcessingStatus, LearningStyle } from '@aida/shared';
 import { Prisma } from '@prisma/client';
+import { PDFParse } from 'pdf-parse';
+import * as mammoth from 'mammoth';
+import { YoutubeTranscript } from 'youtube-transcript';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageProvider } from '../providers/storage.provider';
+import { TranscriptionProvider } from '../providers/transcription.provider';
 import { LlmProvider } from '../providers/llm.provider';
 import { EmbeddingProvider } from '../providers/embedding.provider';
 import { ReviewService } from '../review/review.service';
-import {
-  QUEUE_GENERATE_EMBEDDINGS,
-  QUEUE_GENERATE_CONTENT,
-} from '../queue/queue.constants';
 import { chunkText, toVectorLiteral } from './embeddings.util';
 
 const CHUNK_SIZE = 500;
+
+function detectAudioMimeType(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'wav':
+      return 'audio/wav';
+    case 'm4a':
+      return 'audio/x-m4a';
+    case 'ogg':
+      return 'audio/ogg';
+    case 'webm':
+      return 'audio/webm';
+    case 'flac':
+      return 'audio/flac';
+    case 'aac':
+      return 'audio/aac';
+    case 'mp3':
+    default:
+      return 'audio/mpeg';
+  }
+}
 
 @Injectable()
 export class IngestionService {
@@ -21,21 +41,54 @@ export class IngestionService {
 
   constructor(
     private prisma: PrismaService,
+    private storage: StorageProvider,
+    private transcription: TranscriptionProvider,
     private llm: LlmProvider,
     private embeddingProvider: EmbeddingProvider,
     private reviewService: ReviewService,
-    @InjectQueue(QUEUE_GENERATE_EMBEDDINGS) private embeddingsQueue: Queue,
-    @InjectQueue(QUEUE_GENERATE_CONTENT) private contentQueue: Queue,
   ) {}
 
-  async markProcessing(documentId: string) {
+  /**
+   * Dispatches document processing asynchronously on the next event loop tick
+   * so that the HTTP controller can return immediately (201 Created) without blocking the user.
+   */
+  processDocumentAsync(documentId: string, type: DocType): void {
+    setImmediate(async () => {
+      await this.runPipeline(documentId, type);
+    });
+  }
+
+  /**
+   * Executes the full 3-stage ingestion pipeline in-memory:
+   * 1. Extraction (PDF / DOCX / Audio / YouTube / Text)
+   * 2. Embedding Generation (Vector chunking & pgvector storage)
+   * 3. AI Content Synthesis (Notes, Flashcards, Mind Map, Quizzes -> READY)
+   */
+  async runPipeline(documentId: string, type: DocType): Promise<void> {
+    await this.markProcessing(documentId);
+    try {
+      if (type !== DocType.TEXT) {
+        await this.extractText(documentId, type);
+      }
+      await this.generateEmbeddingsForDocument(documentId);
+      await this.generateContentForDocument(documentId);
+      this.logger.log(
+        `Document ${documentId} (${type}) successfully ingested and marked READY`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.markFailed(documentId, message);
+    }
+  }
+
+  async markProcessing(documentId: string): Promise<void> {
     await this.prisma.document.update({
       where: { id: documentId },
       data: { status: ProcessingStatus.PROCESSING },
     });
   }
 
-  async markFailed(documentId: string, reason: string) {
+  async markFailed(documentId: string, reason: string): Promise<void> {
     this.logger.error(`Document ${documentId} failed: ${reason}`);
     await this.prisma.document.update({
       where: { id: documentId },
@@ -43,17 +96,75 @@ export class IngestionService {
     });
   }
 
-  /** Called by parse-pdf / transcribe-audio / fetch-youtube-transcript once raw text is extracted. */
-  async setExtractedTextAndAdvance(documentId: string, text: string) {
+  /** Stage 1: Extracts text from uploaded files (S3) or external sources (YouTube). */
+  private async extractText(documentId: string, type: DocType): Promise<void> {
+    const document = await this.prisma.document.findUniqueOrThrow({
+      where: { id: documentId },
+    });
+
+    let extractedText = '';
+
+    switch (type) {
+      case DocType.PDF: {
+        if (!document.storageKey)
+          throw new Error('No file stored for this document.');
+        const buffer = await this.storage.download(document.storageKey);
+        const parser = new PDFParse({ data: buffer });
+        const parsed = await parser.getText();
+        await parser.destroy();
+        extractedText = parsed.text.trim();
+        break;
+      }
+      case DocType.DOCX: {
+        if (!document.storageKey)
+          throw new Error('No file stored for this document.');
+        const buffer = await this.storage.download(document.storageKey);
+        const result = await mammoth.extractRawText({ buffer });
+        extractedText = result.value.trim();
+        break;
+      }
+      case DocType.AUDIO: {
+        if (!document.storageKey)
+          throw new Error('No file stored for this document.');
+        const buffer = await this.storage.download(document.storageKey);
+        const mimeType = detectAudioMimeType(
+          document.storageKey || document.title,
+        );
+        const { text } = await this.transcription.transcribe({
+          fileBuffer: buffer,
+          mimeType,
+        });
+        extractedText = text.trim();
+        break;
+      }
+      case DocType.YOUTUBE: {
+        if (!document.sourceUrl)
+          throw new Error('No source URL provided for YouTube ingestion.');
+        const items = await YoutubeTranscript.fetchTranscript(
+          document.sourceUrl,
+        );
+        extractedText = items
+          .map((i) => i.text)
+          .join(' ')
+          .trim();
+        break;
+      }
+      default:
+        break;
+    }
+
+    if (!extractedText) {
+      throw new Error(`Failed to extract text from document of type ${type}`);
+    }
+
     await this.prisma.document.update({
       where: { id: documentId },
-      data: { extractedText: text },
+      data: { extractedText },
     });
-    await this.embeddingsQueue.add('embed', { documentId });
   }
 
-  /** generate-embeddings stage: chunk extracted text, store embedding rows, advance to content generation. */
-  async generateEmbeddingsForDocument(documentId: string) {
+  /** Stage 2: Chunks extracted text, stores pgvector embeddings, and associates with primary topic. */
+  async generateEmbeddingsForDocument(documentId: string): Promise<void> {
     const document = await this.prisma.document.findUniqueOrThrow({
       where: { id: documentId },
     });
@@ -61,9 +172,6 @@ export class IngestionService {
 
     const chunks = chunkText(text, CHUNK_SIZE);
 
-    // A placeholder Topic must exist before embeddings can attach to it —
-    // full content gets filled in by the generate-content stage.
-    // Uses the unique (documentId, isPrimary) constraint for idempotency.
     let topic = await this.prisma.topic.findFirst({
       where: { documentId, isPrimary: true },
     });
@@ -85,12 +193,10 @@ export class IngestionService {
         toVectorLiteral(vector),
       );
     }
-
-    await this.contentQueue.add('generate', { documentId });
   }
 
-  /** generate-content stage: LlmProvider turns extracted text into summary/notes/mindmap/quiz, then the document goes READY. */
-  async generateContentForDocument(documentId: string) {
+  /** Stage 3: LlmProvider turns extracted text into summary/notes/mindmap/quiz, then marks document READY. */
+  async generateContentForDocument(documentId: string): Promise<void> {
     const document = await this.prisma.document.findUniqueOrThrow({
       where: { id: documentId },
       include: { user: { select: { learningStyle: true } } },
@@ -104,7 +210,6 @@ export class IngestionService {
         (document.user?.learningStyle as LearningStyle | null) ?? null,
     });
 
-    // Resolve topic list — multi-topic if `topics` present, else wrap legacy fields
     const topicList = generated.topics?.length
       ? generated.topics
       : [
@@ -123,7 +228,6 @@ export class IngestionService {
       const t = topicList[i];
       const isPrimary = i === 0;
 
-      // Find or create this topic row
       let topic = isPrimary
         ? await this.prisma.topic.findFirst({
             where: { documentId, isPrimary: true },
@@ -197,7 +301,6 @@ export class IngestionService {
       data: { status: ProcessingStatus.READY },
     });
 
-    // Seed spaced-repetition schedule for every generated topic
     for (const topicId of savedTopicIds) {
       await this.reviewService.ensureScheduled(topicId);
     }
