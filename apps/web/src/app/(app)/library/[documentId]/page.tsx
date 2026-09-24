@@ -31,7 +31,11 @@ export default async function DocumentPage({
       </div>
 
       {document.status === ProcessingStatus.READY && document.topics[0] ? (
-        <DocumentBody topicId={document.topics[0].id} />
+        <DocumentBody
+          topicId={document.topics[0].id}
+          documentTitle={document.title}
+          topics={document.topics}
+        />
       ) : document.status === ProcessingStatus.FAILED ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-danger-600/40 bg-danger-100 py-16 text-center dark:bg-danger-900/20">
           <AlertTriangle className="size-8 text-danger-600" />
@@ -51,7 +55,21 @@ export default async function DocumentPage({
   );
 }
 
-async function DocumentBody({ topicId }: { topicId: string }) {
+async function DocumentBody({
+  topicId,
+  documentTitle,
+  topics,
+}: {
+  topicId: string;
+  documentTitle: string;
+  topics: DocumentDetail["topics"];
+}) {
   const topic = await serverFetch<TopicDetail>(`/topics/${topicId}`);
-  return <DocumentDetailTabs topic={topic} />;
+  return (
+    <DocumentDetailTabs
+      topic={topic}
+      documentTitle={documentTitle}
+      topics={topics}
+    />
+  );
 }

@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Headphones,
   ChevronRight,
   Play,
   Pause,
   SkipForward,
+  SkipBack,
   Volume2,
   AlertCircle,
   Loader2,
   RefreshCw,
+  Sparkles,
+  User,
+  MessageSquare,
+  RotateCcw,
+  Radio,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -23,6 +29,7 @@ import type {
   ScenarioPresentation,
   StepByStepPresentation,
   AudioLessonPresentation,
+  ConversationalPresentation,
   NoteSection,
 } from "@aida/shared";
 import { LearningMethod } from "@aida/shared";
@@ -416,115 +423,542 @@ function StepByStepView({ data }: { data: StepByStepPresentation }) {
 // ── Audio Lesson ──────────────────────────────────────────────────────────────
 function AudioLessonView({ data }: { data: AudioLessonPresentation }) {
   const [activeSection, setActiveSection] = useState(0);
-  const sections = [
-    { heading: "Introduction", spokenText: data.intro },
-    ...(data.sections ?? []),
-    { heading: "Recap", spokenText: data.recap },
-  ];
+  const [autoPlayNext, setAutoPlayNext] = useState(true);
+  const sections = useMemo(
+    () => [
+      { heading: "Introduction", spokenText: data.intro },
+      ...(data.sections ?? []),
+      { heading: "Recap", spokenText: data.recap },
+    ],
+    [data.intro, data.sections, data.recap],
+  );
   const [speaking, setSpeaking] = useState(false);
   const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const activeSectionRef = useRef(0);
+  const autoPlayNextRef = useRef(true);
+  const sectionsRef = useRef(sections);
 
-  function speakCurrent() {
+  useEffect(() => {
+    activeSectionRef.current = activeSection;
+  }, [activeSection]);
+
+  useEffect(() => {
+    autoPlayNextRef.current = autoPlayNext;
+  }, [autoPlayNext]);
+
+  useEffect(() => {
+    sectionsRef.current = sections;
+  }, [sections]);
+
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  function speakSection(index: number) {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(
-      sections[activeSection]?.spokenText ?? "",
-    );
+    const section = sectionsRef.current[index];
+    if (!section || !section.spokenText) {
+      setSpeaking(false);
+      return;
+    }
+
+    activeSectionRef.current = index;
+    setActiveSection(index);
+
+    const utter = new SpeechSynthesisUtterance(section.spokenText);
     utter.rate = 0.95;
-    utter.onend = () => setSpeaking(false);
+    utter.onend = () => {
+      // Auto-advance and auto-play next chapter if enabled
+      if (
+        autoPlayNextRef.current &&
+        activeSectionRef.current + 1 < sectionsRef.current.length
+      ) {
+        const nextIdx = activeSectionRef.current + 1;
+        setTimeout(() => {
+          speakSection(nextIdx);
+        }, 500);
+      } else {
+        setSpeaking(false);
+      }
+    };
+    utter.onerror = () => {
+      setSpeaking(false);
+    };
+
     utterRef.current = utter;
     window.speechSynthesis.speak(utter);
     setSpeaking(true);
   }
 
   function stopSpeaking() {
-    window.speechSynthesis.cancel();
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
     setSpeaking(false);
   }
 
   function next() {
-    stopSpeaking();
-    setActiveSection((s) => Math.min(sections.length - 1, s + 1));
+    const nextIdx = Math.min(sections.length - 1, activeSection + 1);
+    if (speaking) {
+      speakSection(nextIdx);
+    } else {
+      setActiveSection(nextIdx);
+    }
   }
 
+  function prev() {
+    const prevIdx = Math.max(0, activeSection - 1);
+    if (speaking) {
+      speakSection(prevIdx);
+    } else {
+      setActiveSection(prevIdx);
+    }
+  }
+
+  const currentSection = sections[activeSection];
+  const progressPercent = Math.round(((activeSection + 1) / sections.length) * 100);
+
   return (
-    <div className="flex flex-col gap-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40">
-          <Headphones className="size-5 text-violet-600 dark:text-violet-400" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-foreground">{data.title}</p>
-          <p className="text-xs text-muted-foreground">
-            ~{data.durationEstimateMinutes} min · {sections.length} sections
-          </p>
-        </div>
-      </div>
-
-      {/* Section List */}
-      <div className="flex flex-wrap gap-2">
-        {sections.map((sec, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => {
-              stopSpeaking();
-              setActiveSection(i);
-            }}
-            className={cn(
-              "rounded-lg px-3 py-1 text-xs font-medium transition",
-              i === activeSection
-                ? "bg-violet-500 text-white"
-                : "border border-border bg-card text-muted-foreground hover:bg-accent/40",
+    <div className="flex flex-col gap-6">
+      {/* Header with Title & Auto-Play Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-violet-200/70 bg-gradient-to-r from-violet-500/10 via-purple-500/5 to-transparent p-5 dark:border-violet-900/40 dark:from-violet-950/30">
+        <div className="flex items-center gap-3">
+          <div className="relative flex size-12 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-md shadow-violet-500/20">
+            <Headphones className="size-6" />
+            {speaking && (
+              <span className="absolute -top-1 -right-1 flex size-3.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+                <span className="relative inline-flex size-3.5 rounded-full bg-violet-500" />
+              </span>
             )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
+                Audio Masterclass
+              </span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-xs text-muted-foreground">
+                Section {activeSection + 1} of {sections.length} (~{data.durationEstimateMinutes} min)
+              </span>
+            </div>
+            <h2 className="font-heading text-lg font-bold tracking-tight text-foreground">
+              {data.title}
+            </h2>
+          </div>
+        </div>
+
+        {/* Auto-play toggle button */}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setAutoPlayNext((v) => !v)}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all select-none",
+              autoPlayNext
+                ? "border-violet-400 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+                : "border-border bg-card text-muted-foreground hover:bg-accent/40"
+            )}
+            title="Automatically play the next section when the current section finishes"
           >
-            {sec.heading}
+            <Radio className={cn("size-3.5", autoPlayNext && "animate-pulse text-violet-600 dark:text-violet-400")} />
+            Auto-play next section: <strong className="font-bold">{autoPlayNext ? "ON" : "OFF"}</strong>
           </button>
-        ))}
+        </div>
       </div>
 
-      {/* Active Section */}
-      {sections[activeSection] && (
-        <div className="rounded-xl border border-violet-200/60 bg-violet-50/30 dark:border-violet-800/40 dark:bg-violet-950/20 flex flex-col gap-4 p-5">
-          <h3 className="text-sm font-semibold text-violet-700 dark:text-violet-300">
-            {sections[activeSection].heading}
-          </h3>
-          <p className="text-sm leading-[1.8] text-foreground/90">
-            {sections[activeSection].spokenText}
+      {/* Progress Bar */}
+      <div className="w-full bg-muted/50 rounded-full h-1.5 overflow-hidden">
+        <div
+          className="bg-violet-600 h-full transition-all duration-300 rounded-full"
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
+
+      {/* Section Pill Switcher */}
+      <div className="flex flex-wrap gap-2">
+        {sections.map((sec, i) => {
+          const isCurrent = i === activeSection;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                if (speaking) {
+                  speakSection(i);
+                } else {
+                  setActiveSection(i);
+                }
+              }}
+              className={cn(
+                "group relative flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all",
+                isCurrent
+                  ? "bg-violet-600 text-white shadow-sm shadow-violet-500/30"
+                  : "border border-border/80 bg-card text-muted-foreground hover:border-violet-400/40 hover:text-foreground"
+              )}
+            >
+              {speaking && isCurrent && (
+                <span className="flex items-center gap-0.5">
+                  <span className="size-1 rounded-full bg-white animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="size-1 rounded-full bg-white animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="size-1 rounded-full bg-white animate-bounce" style={{ animationDelay: "300ms" }} />
+                </span>
+              )}
+              <span>{sec.heading}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Active Section Player Card */}
+      {currentSection && (
+        <div className="rounded-2xl border border-violet-200/80 bg-card p-6 shadow-sm dark:border-violet-900/50">
+          <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="flex size-6 items-center justify-center rounded-lg bg-violet-100 text-xs font-bold text-violet-700 dark:bg-violet-900/50 dark:text-violet-300">
+                {activeSection + 1}
+              </span>
+              <h3 className="font-heading text-base font-semibold text-foreground">
+                {currentSection.heading}
+              </h3>
+            </div>
+            {speaking && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 animate-pulse">
+                <Volume2 className="size-3.5" /> Playing narration…
+              </span>
+            )}
+          </div>
+
+          <p className="text-base leading-relaxed text-foreground/90 whitespace-pre-wrap">
+            {currentSection.spokenText}
           </p>
 
-          <div className="flex items-center gap-2 pt-1">
+          {/* Player Action Buttons */}
+          <div className="mt-6 flex flex-wrap items-center gap-3 pt-3 border-t border-border/50">
+            <button
+              type="button"
+              onClick={prev}
+              disabled={activeSection === 0}
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:bg-accent disabled:opacity-40"
+            >
+              <SkipBack className="size-3.5" /> Prev
+            </button>
+
             {!speaking ? (
               <button
                 type="button"
-                onClick={speakCurrent}
-                className="flex items-center gap-1.5 rounded-lg bg-violet-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-violet-600"
+                onClick={() => speakSection(activeSection)}
+                className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-violet-500/20 transition hover:bg-violet-700 hover:scale-[1.02] active:scale-[0.98]"
               >
-                <Play className="size-3" /> Listen
+                <Play className="size-3.5 fill-current" /> Listen to Chapter
               </button>
             ) : (
               <button
                 type="button"
                 onClick={stopSpeaking}
-                className="flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-2 text-xs font-medium text-white transition hover:bg-violet-800"
+                className="flex items-center gap-2 rounded-xl bg-violet-700 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-violet-500/30 transition hover:bg-violet-800"
               >
-                <Pause className="size-3" /> Stop
+                <Pause className="size-3.5 fill-current" /> Pause Narration
               </button>
             )}
+
             <button
               type="button"
               onClick={next}
               disabled={activeSection === sections.length - 1}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:bg-muted disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition hover:bg-accent disabled:opacity-40"
             >
-              <SkipForward className="size-3" /> Next
+              <SkipForward className="size-3.5" /> Next Chapter
             </button>
+
             <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-              <Volume2 className="size-3" />
+              <Volume2 className="size-3.5" />
               Browser TTS
             </span>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Conversational ────────────────────────────────────────────────────────────
+function parseConversationalTurns(
+  data?: ConversationalPresentation,
+  rawMarkdown?: string,
+): { speaker: "tutor" | "student"; text: string }[] {
+  if (data?.dialogue && data.dialogue.length > 0) {
+    return data.dialogue;
+  }
+
+  // Handle literal escaped \n strings as well as real newlines
+  const text = (rawMarkdown ?? "").replace(/\\n/g, "\n");
+  if (!text) return [];
+
+  // Match Tutor: or Student: turns
+  const regex = /(?:^|\n+)(?:(?:\*\*)?(Tutor|Student|Teacher|Assistant|User)(?:\*\*)?:\s*)/gi;
+  const turns: { speaker: "tutor" | "student"; text: string }[] = [];
+
+  const parts = text.split(regex);
+  if (parts.length > 1) {
+    for (let i = 1; i < parts.length; i += 2) {
+      const roleStr = parts[i]?.toLowerCase() ?? "";
+      const isTutor =
+        roleStr.includes("tutor") ||
+        roleStr.includes("teacher") ||
+        roleStr.includes("assistant");
+      const content = parts[i + 1]?.trim();
+      if (content) {
+        turns.push({
+          speaker: isTutor ? "tutor" : "student",
+          text: content,
+        });
+      }
+    }
+  }
+
+  if (turns.length === 0 && text.trim()) {
+    const paragraphs = text.split(/\n\n+/).filter(Boolean);
+    paragraphs.forEach((p, idx) => {
+      turns.push({
+        speaker: idx % 2 === 0 ? "tutor" : "student",
+        text: p.trim(),
+      });
+    });
+  }
+
+  return turns;
+}
+
+function ConversationalView({
+  data,
+  markdown,
+}: {
+  data?: ConversationalPresentation;
+  markdown?: string;
+}) {
+  const turns = parseConversationalTurns(data, markdown);
+  const [interactiveMode, setInteractiveMode] = useState(false);
+  const [revealedCount, setRevealedCount] = useState(2);
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  const speakingRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    speakingRef.current = speakingIdx;
+  }, [speakingIdx]);
+
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  function speakTurn(index: number) {
+    if (!("speechSynthesis" in window) || index >= turns.length) {
+      setSpeakingIdx(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const turn = turns[index];
+    const utter = new SpeechSynthesisUtterance(turn.text);
+    // Distinct pitch for Tutor vs Student
+    utter.pitch = turn.speaker === "tutor" ? 1.0 : 1.25;
+    utter.rate = 1.0;
+    utter.onend = () => {
+      if (speakingRef.current !== null && index + 1 < turns.length) {
+        setTimeout(() => speakTurn(index + 1), 400);
+      } else {
+        setSpeakingIdx(null);
+      }
+    };
+    utter.onerror = () => setSpeakingIdx(null);
+    setSpeakingIdx(index);
+    window.speechSynthesis.speak(utter);
+  }
+
+  function stopSpeaking() {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingIdx(null);
+  }
+
+  const visibleTurns = interactiveMode ? turns.slice(0, revealedCount) : turns;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-brand-200/70 bg-gradient-to-r from-brand-500/10 via-brand-500/5 to-transparent p-5 dark:border-brand-900/40 dark:from-brand-950/30">
+        <div className="flex items-center gap-3">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-md shadow-brand-500/20">
+            <MessageSquare className="size-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+                Socratic Dialogue
+              </span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-xs text-muted-foreground">
+                {turns.length} exchange turns
+              </span>
+            </div>
+            <h2 className="font-heading text-lg font-bold tracking-tight text-foreground">
+              {data?.title ?? "Interactive Conversational Learning"}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {data?.introduction ?? "Guided discovery through an engaging question-and-answer dialogue."}
+            </p>
+          </div>
+        </div>
+
+        {/* Mode controls & Speech Narration */}
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {speakingIdx === null ? (
+            <button
+              type="button"
+              onClick={() => speakTurn(0)}
+              className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 shadow-sm"
+            >
+              <Play className="size-3 fill-current" /> Read Aloud
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={stopSpeaking}
+              className="flex items-center gap-1.5 rounded-xl bg-brand-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-800"
+            >
+              <Pause className="size-3 fill-current" /> Pause
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setInteractiveMode((v) => !v);
+              setRevealedCount(2);
+            }}
+            className={cn(
+              "rounded-xl border px-3 py-1.5 text-xs font-medium transition-all select-none",
+              interactiveMode
+                ? "border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-600 dark:bg-brand-950/40 dark:text-brand-300"
+                : "border-border bg-card text-muted-foreground hover:bg-accent/40"
+            )}
+          >
+            {interactiveMode ? "Interactive: Active" : "Interactive Practice Mode"}
+          </button>
+        </div>
+      </div>
+
+      {/* Interactive Mode progress bar if active */}
+      {interactiveMode && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-border/80 bg-muted/30 px-4 py-2.5 text-xs">
+          <span className="text-muted-foreground">
+            Exchange <strong>{Math.min(visibleTurns.length, turns.length)}</strong> of <strong>{turns.length}</strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRevealedCount((c) => Math.min(turns.length, c + 2))}
+              disabled={revealedCount >= turns.length}
+              className="rounded-lg bg-brand-600 px-3 py-1 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-40"
+            >
+              Reveal Next Exchange
+            </button>
+            <button
+              type="button"
+              onClick={() => setRevealedCount(2)}
+              className="rounded-lg border border-border px-2.5 py-1 text-muted-foreground hover:bg-accent"
+              title="Start Over"
+            >
+              <RotateCcw className="size-3" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dialogue Stream */}
+      <div className="flex flex-col gap-4">
+        {visibleTurns.map((turn, i) => {
+          const isTutor = turn.speaker === "tutor";
+          const isSpeakingNow = speakingIdx === i;
+
+          return (
+            <div
+              key={i}
+              className={cn(
+                "flex items-start gap-3 transition-all duration-200",
+                isTutor ? "justify-start" : "justify-end flex-row-reverse"
+              )}
+            >
+              {/* Avatar Icon */}
+              <div
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-2xl shadow-xs transition-transform",
+                  isSpeakingNow && "scale-110 ring-2 ring-brand-500",
+                  isTutor
+                    ? "bg-brand-500/15 text-brand-600 dark:bg-brand-500/25 dark:text-brand-300"
+                    : "bg-violet-500/15 text-violet-600 dark:bg-violet-500/25 dark:text-violet-300"
+                )}
+              >
+                {isTutor ? <Sparkles className="size-4" /> : <User className="size-4" />}
+              </div>
+
+              {/* Message Bubble */}
+              <div
+                className={cn(
+                  "flex max-w-[85%] flex-col gap-1.5 rounded-2xl p-4 shadow-xs transition-all",
+                  isSpeakingNow && "ring-2 ring-brand-500/50",
+                  isTutor
+                    ? "rounded-tl-xs border border-border/80 bg-card text-foreground"
+                    : "rounded-tr-xs border border-violet-200/60 bg-violet-50/40 text-foreground dark:border-violet-800/40 dark:bg-violet-950/20"
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={cn(
+                      "text-[11px] font-bold uppercase tracking-wider",
+                      isTutor
+                        ? "text-brand-600 dark:text-brand-400"
+                        : "text-violet-600 dark:text-violet-400"
+                    )}
+                  >
+                    {isTutor ? "AI Tutor" : "Student"}
+                  </span>
+                  {isSpeakingNow && (
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-brand-600 dark:text-brand-400 animate-pulse">
+                      <Volume2 className="size-3" /> Speaking…
+                    </span>
+                  )}
+                </div>
+
+                <div className="prose prose-sm dark:prose-invert max-w-none text-foreground leading-relaxed">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {turn.text}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Summary Takeaway Card */}
+      {data?.summaryTakeaway && (
+        <div className="mt-2 rounded-2xl border border-amber-300/60 bg-amber-50/50 p-5 dark:border-amber-800/40 dark:bg-amber-950/20">
+          <p className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-1">
+            ✦ Core Socratic Takeaway
+          </p>
+          <p className="text-sm leading-relaxed text-foreground/90">
+            {data.summaryTakeaway}
+          </p>
         </div>
       )}
     </div>
@@ -572,7 +1006,10 @@ function DirectNotesView({
 }
 
 // ── Main Presentation View ────────────────────────────────────────────────────
-function renderContent(content: AdaptedPresentationResponse["content"]) {
+function renderContent(
+  content: AdaptedPresentationResponse["content"],
+  method?: LearningMethod,
+) {
   if (content.visual) return <VisualView data={content.visual} />;
   if (content.storiesAnalogies)
     return <StoriesAnalogiesView data={content.storiesAnalogies} />;
@@ -581,6 +1018,20 @@ function renderContent(content: AdaptedPresentationResponse["content"]) {
   if (content.scenarios) return <ScenariosView data={content.scenarios} />;
   if (content.stepByStep) return <StepByStepView data={content.stepByStep} />;
   if (content.audioLesson) return <AudioLessonView data={content.audioLesson} />;
+  if (
+    content.conversational ||
+    method === LearningMethod.CONVERSATIONAL ||
+    (content.markdown &&
+      (content.markdown.includes("Tutor:") ||
+        content.markdown.includes("Student:")))
+  ) {
+    return (
+      <ConversationalView
+        data={content.conversational}
+        markdown={content.markdown}
+      />
+    );
+  }
   if (content.directNotes || content.markdown)
     return (
       <DirectNotesView notes={content.directNotes} markdown={content.markdown} />
@@ -678,5 +1129,5 @@ export function AdaptedPresentationView({
 
   if (!data) return null;
 
-  return renderContent(data.content);
+  return renderContent(data.content, method);
 }

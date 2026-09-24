@@ -42,12 +42,22 @@ export class TutorService {
         : (userLearningPreferences as unknown as import('@aida/shared').LearningMethod[]);
 
     let topicIds: string[] = [];
+    let resolvedDocumentId = dto.documentId;
+
     if (dto.topicId) {
       const topic = await this.prisma.topic.findFirst({
         where: { id: dto.topicId, document: { userId } },
+        select: { id: true, documentId: true },
       });
       if (!topic) throw new NotFoundException('Topic not found.');
       topicIds = [topic.id];
+      if (!resolvedDocumentId) resolvedDocumentId = topic.documentId;
+    } else if (dto.documentId) {
+      const topics = await this.prisma.topic.findMany({
+        where: { documentId: dto.documentId, document: { userId } },
+        select: { id: true },
+      });
+      topicIds = topics.map((t) => t.id);
     } else {
       const topics = await this.prisma.topic.findMany({
         where: { document: { userId } },
@@ -57,9 +67,12 @@ export class TutorService {
     }
 
     const recentMessages = await this.prisma.tutorMessage.findMany({
-      where: { userId, topicId: dto.topicId ?? null },
+      where: {
+        userId,
+        ...(resolvedDocumentId ? { documentId: resolvedDocumentId } : {}),
+      },
       orderBy: { createdAt: 'desc' },
-      take: 4,
+      take: 6,
     });
     const history = recentMessages.reverse().map((m) => ({
       role: m.role as 'user' | 'assistant',
@@ -100,6 +113,7 @@ export class TutorService {
     await this.prisma.tutorMessage.create({
       data: {
         userId,
+        documentId: resolvedDocumentId,
         topicId: dto.topicId,
         role: 'user',
         content: dto.message,
@@ -108,6 +122,7 @@ export class TutorService {
     const saved = await this.prisma.tutorMessage.create({
       data: {
         userId,
+        documentId: resolvedDocumentId,
         topicId: dto.topicId,
         role: 'assistant',
         content: answer,
@@ -154,9 +169,28 @@ export class TutorService {
     return rows;
   }
 
-  async history(userId: string, topicId?: string): Promise<TutorChatMessage[]> {
+  async history(
+    userId: string,
+    topicId?: string,
+    documentId?: string,
+  ): Promise<TutorChatMessage[]> {
+    const whereClause: {
+      userId: string;
+      documentId?: string;
+      topicId?: string;
+    } = { userId };
+
+    if (documentId) {
+      whereClause.documentId = documentId;
+      if (topicId) {
+        whereClause.topicId = topicId;
+      }
+    } else if (topicId) {
+      whereClause.topicId = topicId;
+    }
+
     const messages = await this.prisma.tutorMessage.findMany({
-      where: { userId, topicId: topicId ?? undefined },
+      where: whereClause,
       orderBy: { createdAt: 'asc' },
       take: 100,
     });
@@ -164,6 +198,8 @@ export class TutorService {
       id: m.id,
       role: m.role as 'user' | 'assistant',
       content: m.content,
+      documentId: m.documentId,
+      topicId: m.topicId,
       citations: (m.citations as unknown as TutorCitation[]) ?? undefined,
       rating: m.rating,
       createdAt: m.createdAt.toISOString(),

@@ -365,6 +365,31 @@ export class MockLlmProvider extends LlmProvider {
           },
         };
       }
+      case LearningMethod.CONVERSATIONAL: {
+        return {
+          conversational: {
+            title: `Conversational Deep Dive: ${topicTitle}`,
+            introduction: `Join this Socratic back-and-forth exploring ${topicTitle} to help you understand every nuance.`,
+            dialogue: notes.flatMap((n) => [
+              {
+                speaker: 'tutor' as const,
+                text: `Let's discuss ${n.heading}. What is the primary takeaway we should understand here?`,
+              },
+              {
+                speaker: 'student' as const,
+                text:
+                  n.bullets.join('. ') ||
+                  `It sets the groundwork for the core principles of ${topicTitle}.`,
+              },
+              {
+                speaker: 'tutor' as const,
+                text: `Exactly right! Notice how that connects directly to the overall goal of ${topicTitle}.`,
+              },
+            ]),
+            summaryTakeaway: `Mastering ${topicTitle} relies on understanding how each component interacts. Keep this dialogue in mind as you review.`,
+          },
+        };
+      }
       case LearningMethod.DIRECT_NOTES:
       default: {
         return {
