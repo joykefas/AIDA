@@ -1,5 +1,12 @@
-import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
-import { TutorMessageRequest } from '@aida/shared';
+import {
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
+import { LearningMethod, TutorMessageRequest } from '@aida/shared';
 
 export class TutorMessageDto implements TutorMessageRequest {
   @MinLength(1)
@@ -12,4 +19,9 @@ export class TutorMessageDto implements TutorMessageRequest {
   @IsOptional()
   @IsBoolean()
   simplify?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsEnum(LearningMethod, { each: true })
+  learningMethods?: LearningMethod[];
 }

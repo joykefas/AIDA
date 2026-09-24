@@ -225,7 +225,7 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
           <span className="font-semibold text-foreground">Best study results:</span>{" "}
           {mode === DocType.PDF && (
             <span>
-              Upload individual chapters, lecture slides, or sections (<strong>5–50 pages</strong>). Accepts <strong>PDF and Word (.docx)</strong> documents. For full textbooks, uploading chapter-by-chapter gives you dedicated mind maps, focused quizzes, and targeted spaced-repetition schedules.
+              Upload chapters, lecture slides, or notes — even a single page works. Accepts <strong>PDF and Word (.docx)</strong> documents. For full textbooks, uploading chapter-by-chapter gives you dedicated mind maps, focused quizzes, and targeted spaced-repetition schedules.
             </span>
           )}
           {mode === DocType.AUDIO && (
@@ -364,7 +364,7 @@ export function UploadSheet({ onUploaded }: { onUploaded?: (documentId: string) 
               <div className="flex flex-col items-center gap-1">
                 <span className="font-medium text-foreground">Click or drag a file to upload</span>
                 <span className="text-xs text-muted-foreground">
-                  PDF or Word (.docx) • 5–50 pages recommended (up to 50MB)
+                  PDF or Word (.docx) • any length (up to 50MB)
                 </span>
               </div>
             )}

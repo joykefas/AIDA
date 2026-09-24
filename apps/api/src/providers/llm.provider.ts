@@ -1,5 +1,10 @@
-import { LearningStyle } from '@aida/shared';
-import { NoteSection, MindMapData } from '@aida/shared';
+import {
+  LearningMethod,
+  LearningStyle,
+  NoteSection,
+  MindMapData,
+  AdaptedPresentationResponse,
+} from '@aida/shared';
 
 /** A single topic section generated from a document. */
 export interface GeneratedTopic {
@@ -45,6 +50,7 @@ export interface TutorAnswerInput {
     text: string;
   }[];
   learningStyle: LearningStyle | null;
+  learningMethods?: LearningMethod[];
   simplify: boolean;
   history?: { role: 'user' | 'assistant'; content: string }[];
 }
@@ -63,6 +69,14 @@ export interface GradeWrittenInput {
 export interface GradeWrittenOutput {
   score: number;
   feedback: string;
+}
+
+export interface GenerateAdaptedPresentationInput {
+  topicTitle: string;
+  summary: string;
+  notes: NoteSection[];
+  rawText?: string;
+  method: LearningMethod;
 }
 
 /**
@@ -86,4 +100,7 @@ export abstract class LlmProvider {
   abstract gradeWrittenResponse(
     input: GradeWrittenInput,
   ): Promise<GradeWrittenOutput>;
+  abstract generateAdaptedPresentation(
+    input: GenerateAdaptedPresentationInput,
+  ): Promise<AdaptedPresentationResponse['content']>;
 }

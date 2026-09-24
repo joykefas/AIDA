@@ -19,6 +19,8 @@ export class UsersService {
       email: user.email,
       displayName: user.displayName,
       learningStyle: user.learningStyle as LearningStyle | null,
+      learningPreferences: (user.learningPreferences ??
+        []) as import('@aida/shared').LearningMethod[],
       isMinor: user.isMinor,
       role: user.role as UserProfile['role'],
       createdAt: user.createdAt.toISOString(),
@@ -42,6 +44,9 @@ export class UsersService {
           : {}),
         ...(dto.learningStyle !== undefined
           ? { learningStyle: dto.learningStyle }
+          : {}),
+        ...(dto.learningPreferences !== undefined
+          ? { learningPreferences: dto.learningPreferences }
           : {}),
       },
     });

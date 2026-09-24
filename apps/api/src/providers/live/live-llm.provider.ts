@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { LearningStyle, NoteSection, MindMapData } from '@aida/shared';
+import {
+  LearningMethod,
+  LearningStyle,
+  NoteSection,
+  MindMapData,
+  AdaptedPresentationResponse,
+} from '@aida/shared';
 import {
   LlmProvider,
   GeneratedContent,
@@ -8,6 +14,7 @@ import {
   TutorAnswerOutput,
   GradeWrittenInput,
   GradeWrittenOutput,
+  GenerateAdaptedPresentationInput,
 } from '../llm.provider';
 
 function repairTruncatedJson(str: string): string {
@@ -565,25 +572,63 @@ export class LiveLlmProvider extends LlmProvider {
       .map((c) => `[${c.topicTitle} / ${c.noteAnchor}] ${c.text}`)
       .join('\n\n');
 
-    let styleNote = '';
+    const styleNotes: string[] = [];
+
+    // Legacy single learningStyle support
     if (input.learningStyle) {
       if (input.learningStyle === LearningStyle.DIAGRAMS) {
-        styleNote =
-          'The student learns best with visual structure: present explanations using structured hierarchical outlines, step-by-step numbered flows, and clean Markdown comparison tables (do NOT draw ASCII-art boxes).';
+        styleNotes.push(
+          'The student learns best with visual structure: present explanations using structured hierarchical outlines, step-by-step numbered flows, and clean Markdown comparison tables (do NOT draw ASCII-art boxes).',
+        );
       } else if (input.learningStyle === LearningStyle.ANALOGIES) {
-        styleNote =
-          'The student learns best with analogies: use intuitive real-world comparisons to clarify abstract ideas.';
+        styleNotes.push(
+          'The student learns best with analogies: use intuitive real-world comparisons to clarify abstract ideas.',
+        );
       } else if (input.learningStyle === LearningStyle.STORIES) {
-        styleNote =
-          'The student learns best through stories: frame key concepts in a concise narrative scenario.';
+        styleNotes.push(
+          'The student learns best through stories: frame key concepts in a concise narrative scenario.',
+        );
       } else if (input.learningStyle === LearningStyle.FORMULAS) {
-        styleNote =
-          'The student learns best with formulas: provide compact, formal, step-by-step principles and relationships.';
+        styleNotes.push(
+          'The student learns best with formulas: provide compact, formal, step-by-step principles and relationships.',
+        );
       } else if (input.learningStyle === LearningStyle.AUDIO) {
-        styleNote =
-          'The student learns best through audio: explain in a natural, conversational, spoken-word cadence.';
+        styleNotes.push(
+          'The student learns best through audio: explain in a natural, conversational, spoken-word cadence.',
+        );
       }
     }
+
+    // Multi-method learning preferences override / extend
+    if (input.learningMethods && input.learningMethods.length > 0) {
+      const methodInstructions: Partial<Record<LearningMethod, string>> = {
+        [LearningMethod.VISUAL]:
+          'Use structured hierarchical outlines, Markdown tables, mermaid-style diagrams (in code fences), and numbered flows to illustrate relationships visually.',
+        [LearningMethod.STORIES_ANALOGIES]:
+          'Frame key concepts using relatable real-world stories and analogies. Connect abstract ideas to everyday experiences.',
+        [LearningMethod.MIND_MAPS]:
+          'Structure your answer showing how concepts relate hierarchically: parent → child relationships, central themes → subtopics.',
+        [LearningMethod.AUDIO]:
+          'Write in a natural conversational cadence as if speaking aloud. Use simple transitions, rhetorical questions, and an inviting spoken-word tone.',
+        [LearningMethod.DIRECT_NOTES]:
+          'Deliver concise, structured notes: bullet-point key facts, avoid padding, prioritize high-yield information.',
+        [LearningMethod.CONVERSATIONAL]:
+          'Teach through a Socratic, back-and-forth style. Ask a guiding question, then answer it. Make the student feel like they are figuring it out themselves.',
+        [LearningMethod.PRACTICAL_EXAMPLES]:
+          'Ground every concept in practical, real-world examples. Show what it looks like in production, in daily life, or in industry.',
+        [LearningMethod.SCENARIOS]:
+          'Present a realistic scenario or use-case that requires applying the concept, then walk through how the concept solves the challenge.',
+        [LearningMethod.STEP_BY_STEP]:
+          'Break explanations into numbered sequential steps. Each step builds on the previous one. Include a brief checkpoint at the end of each step.',
+      };
+
+      for (const method of input.learningMethods) {
+        const instruction = methodInstructions[method];
+        if (instruction) styleNotes.push(instruction);
+      }
+    }
+
+    const styleNote = styleNotes.join(' ');
 
     const simplifyNote = input.simplify
       ? 'Simplify the explanation significantly: focus only on the absolute core takeaway in plain, crystal-clear language (ELIF / explain-like-I-am-12 style).'
@@ -626,5 +671,139 @@ export class LiveLlmProvider extends LlmProvider {
       score: 0.5,
       feedback: 'Answer submitted and reviewed.',
     });
+  }
+
+  async generateAdaptedPresentation(
+    input: GenerateAdaptedPresentationInput,
+  ): Promise<AdaptedPresentationResponse['content']> {
+    const notesText = input.notes
+      .map(
+        (n: NoteSection) =>
+          `${n.heading}:\n${n.bullets.map((b: string) => `- ${b}`).join('\n')}`,
+      )
+      .join('\n\n');
+
+    const materialContext = input.rawText
+      ? input.rawText.slice(0, 8000)
+      : notesText;
+
+    const methodPrompts: Record<
+      LearningMethod,
+      { system: string; userHint: string }
+    > = {
+      [LearningMethod.VISUAL]: {
+        system:
+          `You generate visual learning content as JSON. For the given topic, produce a mermaid flowchart/diagram and a visual breakdown table.` +
+          ` Respond ONLY with valid JSON: {"diagramType":"mermaid","mermaidCode":"...","charts":[{"title":"...","explanation":"..."}],"visualBreakdown":[{"title":"...","content":"...","keyTakeaway":"..."}]}`,
+        userHint: 'visual diagrams and charts',
+      },
+      [LearningMethod.STORIES_ANALOGIES]: {
+        system:
+          `You generate stories and analogies learning content as JSON.` +
+          ` Respond ONLY with valid JSON: {"coreStory":{"title":"...","narrative":"...","moralOrTakeaway":"..."},"analogies":[{"concept":"...","analogy":"...","whyItWorks":"..."}]}`,
+        userHint: 'stories and analogies',
+      },
+      [LearningMethod.MIND_MAPS]: {
+        system:
+          `You generate mind map content as JSON with nodes and edges representing topic relationships.` +
+          ` Respond ONLY with valid JSON: {"markdown":"...","directNotes":[{"heading":"...","anchor":"...","bullets":["..."]}]}`,
+        userHint: 'mind map structure with relationship connections',
+      },
+      [LearningMethod.AUDIO]: {
+        system:
+          `You generate an audio lesson script as JSON with a natural spoken-word cadence.` +
+          ` Respond ONLY with valid JSON: {"title":"...","intro":"...","sections":[{"heading":"...","spokenText":"..."}],"recap":"...","durationEstimateMinutes":5}`,
+        userHint: 'conversational audio lesson script',
+      },
+      [LearningMethod.DIRECT_NOTES]: {
+        system:
+          `You generate structured study notes as JSON. Produce concise, high-yield notes with markdown summary.` +
+          ` Respond ONLY with valid JSON: {"directNotes":[{"heading":"...","anchor":"...","bullets":["..."]}],"markdown":"..."}`,
+        userHint: 'direct structured notes',
+      },
+      [LearningMethod.CONVERSATIONAL]: {
+        system:
+          `You generate a conversational teaching script as JSON that simulates an interactive dialogue.` +
+          ` Respond ONLY with valid JSON: {"markdown":"...","directNotes":[{"heading":"...","anchor":"...","bullets":["..."]}]}`,
+        userHint: 'interactive conversational teaching dialogue',
+      },
+      [LearningMethod.PRACTICAL_EXAMPLES]: {
+        system:
+          `You generate practical real-world examples as JSON for each concept.` +
+          ` Respond ONLY with valid JSON: {"examples":[{"title":"...","context":"...","demonstration":"...","realWorldImpact":"..."}]}`,
+        userHint: 'practical real-world examples',
+      },
+      [LearningMethod.SCENARIOS]: {
+        system:
+          `You generate scenario-based learning content as JSON with realistic situations.` +
+          ` Respond ONLY with valid JSON: {"scenarios":[{"title":"...","scenario":"...","challenge":"...","optimalApproach":"...","analysis":"..."}]}`,
+        userHint: 'realistic scenarios and use-cases',
+      },
+      [LearningMethod.STEP_BY_STEP]: {
+        system:
+          `You generate a step-by-step progressive learning guide as JSON.` +
+          ` Respond ONLY with valid JSON: {"overview":"...","steps":[{"stepNumber":1,"title":"...","explanation":"...","keyActionOrRule":"...","quickCheckQuestion":"...","quickCheckAnswer":"..."}]}`,
+        userHint: 'step-by-step sequential progression',
+      },
+    };
+
+    const methodConfig = methodPrompts[input.method];
+
+    const rawContent = await this.chatComplete(
+      methodConfig.system,
+      `Topic: ${input.topicTitle}\nSummary: ${input.summary}\n\nNotes:\n${notesText}\n\nSource Material:\n${materialContext}\n\nGenerate ${methodConfig.userHint} for this topic.`,
+      true,
+    );
+
+    try {
+      const parsed = parseLlmJson<Record<string, unknown>>(rawContent, {});
+      // Use double-cast (via unknown) to bridge the structural gap between the
+      // parsed JSON record and the typed presentation interfaces.
+      const u = parsed as unknown;
+
+      // Map parsed JSON to the correct content shape based on method
+      switch (input.method) {
+        case LearningMethod.VISUAL:
+          return {
+            visual: u as AdaptedPresentationResponse['content']['visual'],
+          };
+        case LearningMethod.STORIES_ANALOGIES:
+          return {
+            storiesAnalogies:
+              u as AdaptedPresentationResponse['content']['storiesAnalogies'],
+          };
+        case LearningMethod.AUDIO:
+          return {
+            audioLesson:
+              u as AdaptedPresentationResponse['content']['audioLesson'],
+          };
+        case LearningMethod.PRACTICAL_EXAMPLES:
+          return {
+            practicalExamples:
+              u as AdaptedPresentationResponse['content']['practicalExamples'],
+          };
+        case LearningMethod.SCENARIOS:
+          return {
+            scenarios: u as AdaptedPresentationResponse['content']['scenarios'],
+          };
+        case LearningMethod.STEP_BY_STEP:
+          return {
+            stepByStep:
+              u as AdaptedPresentationResponse['content']['stepByStep'],
+          };
+        case LearningMethod.MIND_MAPS:
+        case LearningMethod.CONVERSATIONAL:
+        case LearningMethod.DIRECT_NOTES:
+        default:
+          return {
+            directNotes: (parsed.directNotes as NoteSection[]) ?? input.notes,
+            markdown:
+              typeof parsed.markdown === 'string' ? parsed.markdown : undefined,
+          };
+      }
+    } catch {
+      // Fallback: return direct notes
+      return { directNotes: input.notes };
+    }
   }
 }

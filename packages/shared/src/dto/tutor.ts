@@ -1,3 +1,5 @@
+import { LearningMethod } from "../enums";
+
 export interface TutorScope {
   /** null means "all my material" */
   topicId: string | null;
@@ -9,6 +11,7 @@ export interface TutorMessageRequest {
   topicId?: string;
   /** true when the student tapped "simplify this" on a prior answer. */
   simplify?: boolean;
+  learningMethods?: LearningMethod[];
 }
 
 export interface TutorCitation {

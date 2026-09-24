@@ -58,6 +58,7 @@ model User {
   isMinor               Boolean   @default(false)
   parentalConsentGiven  Boolean   @default(false)
   learningStyle         LearningStyle?
+  learningPreferences   String[]  @default([])
   role                  UserRole  @default(STUDENT)
   refreshTokenHash      String?
   emailOptOut           Boolean   @default(false)
@@ -100,6 +101,7 @@ model Topic {
   summary              String    @default("")
   notes                Json      @default("[]")
   mindMapJson          Json      @default("{\"nodes\":[],\"edges\":[]}")
+  presentations        Json      @default("{}")
   isPrimary            Boolean   @default(false)
 
   // SM-2 spaced-repetition state

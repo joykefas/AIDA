@@ -20,7 +20,8 @@ import { Label } from "@/components/ui/label";
 import { FormError } from "@/components/ui/form-error";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { clientFetch, ApiClientError } from "@/lib/api-client";
-import { LearningStyle, type UserProfile, type UserDataExport } from "@aida/shared";
+import { LearningMethod, LearningStyle, type UserProfile, type UserDataExport } from "@aida/shared";
+import { LearningMethodPicker } from "@/components/learning-method-picker";
 import { cn } from "cn";
 
 const LEARNING_STYLES = [
@@ -61,6 +62,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [selectedStyle, setSelectedStyle] = useState<LearningStyle>(LearningStyle.ANALOGIES);
+  const [selectedMethods, setSelectedMethods] = useState<LearningMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -78,6 +80,7 @@ export default function SettingsPage() {
         setProfile(data);
         setDisplayName(data.displayName ?? "");
         if (data.learningStyle) setSelectedStyle(data.learningStyle);
+        if (data.learningPreferences?.length) setSelectedMethods(data.learningPreferences);
         const optOut = !!data.emailOptOut;
         setEmailOptOut(optOut);
 
@@ -128,6 +131,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           displayName: trimmedName || null,
           learningStyle: selectedStyle,
+          learningPreferences: selectedMethods,
         }),
       });
       setProfile(updated);
@@ -252,6 +256,23 @@ export default function SettingsPage() {
                 );
               })}
             </div>
+          </div>
+
+          <div className="h-px w-full bg-border" />
+
+          {/* Learning Methods Section */}
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2 className="font-heading text-lg font-medium">Preferred Learning Methods</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                AIDA will default to these methods in the <strong>Learn</strong> tab. You can always switch mid-session.
+              </p>
+            </div>
+            <LearningMethodPicker
+              selected={selectedMethods}
+              onChange={setSelectedMethods}
+              multiSelect
+            />
           </div>
 
           <div className="flex items-center justify-between border-t border-border pt-4">

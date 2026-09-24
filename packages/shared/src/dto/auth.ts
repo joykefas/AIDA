@@ -1,4 +1,4 @@
-import { LearningStyle, UserRole } from "../enums";
+import { LearningMethod, LearningStyle, UserRole } from "../enums";
 
 export interface RegisterRequest {
   email: string;
@@ -18,6 +18,7 @@ export interface UserProfile {
   email: string;
   displayName: string | null;
   learningStyle: LearningStyle | null;
+  learningPreferences?: LearningMethod[];
   isMinor: boolean;
   role: UserRole;
   createdAt: string;
@@ -26,12 +27,14 @@ export interface UserProfile {
 }
 
 export interface SetLearningStyleRequest {
-  learningStyle: LearningStyle;
+  learningStyle?: LearningStyle;
+  learningPreferences?: LearningMethod[];
 }
 
 export interface UpdateProfileRequest {
   displayName?: string | null;
   learningStyle?: LearningStyle;
+  learningPreferences?: LearningMethod[];
 }
 
 export interface ForgotPasswordRequest {
