@@ -723,9 +723,9 @@ export class LiveLlmProvider extends LlmProvider {
       },
       [LearningMethod.CONVERSATIONAL]: {
         system:
-          `You generate a conversational teaching script as JSON that simulates an interactive dialogue.` +
-          ` Respond ONLY with valid JSON: {"markdown":"...","directNotes":[{"heading":"...","anchor":"...","bullets":["..."]}]}`,
-        userHint: 'interactive conversational teaching dialogue',
+          `You generate an engaging conversational Socratic teaching dialogue as JSON between a Tutor and a Student.` +
+          ` Respond ONLY with valid JSON: {"title":"...","introduction":"...","dialogue":[{"speaker":"tutor","text":"..."},{"speaker":"student","text":"..."}],"summaryTakeaway":"..."}`,
+        userHint: 'interactive Socratic conversational dialogue',
       },
       [LearningMethod.PRACTICAL_EXAMPLES]: {
         system:
@@ -791,8 +791,14 @@ export class LiveLlmProvider extends LlmProvider {
             stepByStep:
               u as AdaptedPresentationResponse['content']['stepByStep'],
           };
-        case LearningMethod.MIND_MAPS:
         case LearningMethod.CONVERSATIONAL:
+          return {
+            conversational:
+              u as AdaptedPresentationResponse['content']['conversational'],
+            markdown:
+              typeof parsed.markdown === 'string' ? parsed.markdown : undefined,
+          };
+        case LearningMethod.MIND_MAPS:
         case LearningMethod.DIRECT_NOTES:
         default:
           return {

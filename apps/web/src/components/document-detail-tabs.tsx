@@ -16,7 +16,15 @@ import type { TopicDetail } from "@aida/shared";
 import { LearningMethod } from "@aida/shared";
 import { Sparkles } from "lucide-react";
 
-export function DocumentDetailTabs({ topic }: { topic: TopicDetail }) {
+export function DocumentDetailTabs({
+  topic,
+  documentTitle,
+  topics,
+}: {
+  topic: TopicDetail;
+  documentTitle?: string;
+  topics?: { id: string; title: string }[];
+}) {
   const [tab, setTab] = useState("summary");
 
   // Learning preferences state
@@ -226,7 +234,13 @@ export function DocumentDetailTabs({ topic }: { topic: TopicDetail }) {
 
       {/* Tutor */}
       <TabsPanel value="tutor">
-        <TutorChat topicId={topic.id} topicTitle={topic.title} />
+        <TutorChat
+          documentId={topic.documentId}
+          documentTitle={documentTitle}
+          topicId={topic.id}
+          topicTitle={topic.title}
+          topics={topics}
+        />
       </TabsPanel>
     </Tabs>
   );

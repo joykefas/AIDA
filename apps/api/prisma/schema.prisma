@@ -181,6 +181,7 @@ model TutorMessage {
   id           String   @id @default(uuid())
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId   String?
   topicId      String?
   role         String
   content      String
@@ -190,6 +191,7 @@ model TutorMessage {
   createdAt    DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, documentId, createdAt])
 }
 
 model PasswordResetToken {

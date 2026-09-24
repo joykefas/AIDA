@@ -6,8 +6,16 @@ export interface TutorScope {
   topicTitle: string | null;
 }
 
+export interface TutorMaterialScope {
+  documentId: string | null;
+  documentTitle: string | null;
+  topicId: string | null;
+  topicTitle: string | null;
+}
+
 export interface TutorMessageRequest {
   message: string;
+  documentId?: string;
   topicId?: string;
   /** true when the student tapped "simplify this" on a prior answer. */
   simplify?: boolean;
@@ -32,6 +40,8 @@ export interface TutorChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  documentId?: string | null;
+  topicId?: string | null;
   citations?: TutorCitation[];
   rating?: string | null;
   createdAt: string;

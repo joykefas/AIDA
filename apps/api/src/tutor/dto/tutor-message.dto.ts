@@ -14,6 +14,10 @@ export class TutorMessageDto implements TutorMessageRequest {
 
   @IsOptional()
   @IsString()
+  documentId?: string;
+
+  @IsOptional()
+  @IsString()
   topicId?: string;
 
   @IsOptional()

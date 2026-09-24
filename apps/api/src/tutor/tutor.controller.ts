@@ -39,7 +39,8 @@ export class TutorController {
   history(
     @CurrentUser() user: AccessTokenPayload,
     @Query('topicId') topicId?: string,
+    @Query('documentId') documentId?: string,
   ) {
-    return this.tutorService.history(user.sub, topicId);
+    return this.tutorService.history(user.sub, topicId, documentId);
   }
 }

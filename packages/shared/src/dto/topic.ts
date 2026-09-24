@@ -86,6 +86,18 @@ export interface AudioLessonPresentation {
   durationEstimateMinutes: number;
 }
 
+export interface ConversationalDialogueTurn {
+  speaker: "tutor" | "student";
+  text: string;
+}
+
+export interface ConversationalPresentation {
+  title?: string;
+  introduction?: string;
+  dialogue: ConversationalDialogueTurn[];
+  summaryTakeaway?: string;
+}
+
 export interface AdaptedPresentationResponse {
   topicId: string;
   method: LearningMethod;
@@ -96,6 +108,7 @@ export interface AdaptedPresentationResponse {
     scenarios?: ScenarioPresentation;
     stepByStep?: StepByStepPresentation;
     audioLesson?: AudioLessonPresentation;
+    conversational?: ConversationalPresentation;
     directNotes?: NoteSection[];
     markdown?: string;
   };
