@@ -1,47 +1,13 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bullmq';
 import { ReviewModule } from '../review/review.module';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { IngestionService } from './ingestion.service';
-import { ParsePdfProcessor } from './processors/parse-pdf.processor';
-import { ParseDocxProcessor } from './processors/parse-docx.processor';
-import { TranscribeAudioProcessor } from './processors/transcribe-audio.processor';
-import { FetchYoutubeTranscriptProcessor } from './processors/fetch-youtube-transcript.processor';
-import { GenerateEmbeddingsProcessor } from './processors/generate-embeddings.processor';
-import { GenerateContentProcessor } from './processors/generate-content.processor';
-import {
-  QUEUE_PARSE_PDF,
-  QUEUE_PARSE_DOCX,
-  QUEUE_TRANSCRIBE_AUDIO,
-  QUEUE_FETCH_YOUTUBE_TRANSCRIPT,
-  QUEUE_GENERATE_EMBEDDINGS,
-  QUEUE_GENERATE_CONTENT,
-} from '../queue/queue.constants';
 
 @Module({
-  imports: [
-    ReviewModule,
-    BullModule.registerQueue(
-      { name: QUEUE_PARSE_PDF },
-      { name: QUEUE_PARSE_DOCX },
-      { name: QUEUE_TRANSCRIBE_AUDIO },
-      { name: QUEUE_FETCH_YOUTUBE_TRANSCRIPT },
-      { name: QUEUE_GENERATE_EMBEDDINGS },
-      { name: QUEUE_GENERATE_CONTENT },
-    ),
-  ],
+  imports: [ReviewModule],
   controllers: [DocumentsController],
-  providers: [
-    DocumentsService,
-    IngestionService,
-    ParsePdfProcessor,
-    ParseDocxProcessor,
-    TranscribeAudioProcessor,
-    FetchYoutubeTranscriptProcessor,
-    GenerateEmbeddingsProcessor,
-    GenerateContentProcessor,
-  ],
+  providers: [DocumentsService, IngestionService],
   exports: [DocumentsService],
 })
 export class DocumentsModule {}

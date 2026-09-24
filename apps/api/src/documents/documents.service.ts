@@ -1,6 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { randomUUID } from 'crypto';
 import {
   DocType,
@@ -10,26 +8,16 @@ import {
 } from '@aida/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../providers/storage.provider';
+import { IngestionService } from './ingestion.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { toTopicSummary } from './topic.mapper';
-import {
-  QUEUE_PARSE_PDF,
-  QUEUE_PARSE_DOCX,
-  QUEUE_TRANSCRIBE_AUDIO,
-  QUEUE_FETCH_YOUTUBE_TRANSCRIPT,
-  QUEUE_GENERATE_EMBEDDINGS,
-} from '../queue/queue.constants';
 
 @Injectable()
 export class DocumentsService {
   constructor(
     private prisma: PrismaService,
     private storage: StorageProvider,
-    @InjectQueue(QUEUE_PARSE_PDF) private parsePdfQueue: Queue,
-    @InjectQueue(QUEUE_PARSE_DOCX) private parseDocxQueue: Queue,
-    @InjectQueue(QUEUE_TRANSCRIBE_AUDIO) private transcribeQueue: Queue,
-    @InjectQueue(QUEUE_FETCH_YOUTUBE_TRANSCRIPT) private youtubeQueue: Queue,
-    @InjectQueue(QUEUE_GENERATE_EMBEDDINGS) private embeddingsQueue: Queue,
+    private ingestion: IngestionService,
   ) {}
 
   async create(
@@ -61,30 +49,11 @@ export class DocumentsService {
       },
     });
 
-    await this.enqueueFirstStage(document.id, dto.type);
+    // Fire-and-forget: runs the full ingestion pipeline in the background
+    // without blocking the HTTP response. The caller immediately gets 201 Created.
+    this.ingestion.processDocumentAsync(document.id, dto.type);
 
     return { id: document.id, status: document.status };
-  }
-
-  private async enqueueFirstStage(documentId: string, type: DocType) {
-    const jobData = { documentId };
-    switch (type) {
-      case DocType.PDF:
-        await this.parsePdfQueue.add('parse', jobData);
-        break;
-      case DocType.DOCX:
-        await this.parseDocxQueue.add('parse', jobData);
-        break;
-      case DocType.AUDIO:
-        await this.transcribeQueue.add('transcribe', jobData);
-        break;
-      case DocType.YOUTUBE:
-        await this.youtubeQueue.add('fetch', jobData);
-        break;
-      case DocType.TEXT:
-        await this.embeddingsQueue.add('embed', jobData);
-        break;
-    }
   }
 
   private fallbackTitle(

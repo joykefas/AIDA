@@ -2,9 +2,7 @@ import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { BullModule } from '@nestjs/bullmq';
-import { BullBoardModule } from '@bull-board/nestjs';
-import { ExpressAdapter } from '@bull-board/express';
+
 import * as argon2 from 'argon2';
 import { UserRole } from '@aida/shared';
 import { AppController } from './app.controller';
@@ -25,36 +23,14 @@ import { AdminModule } from './admin/admin.module';
 
 import { UserThrottlerGuard } from './auth/guards/user-throttler.guard';
 
-const startupJobsEnabled =
-  process.env.NODE_ENV === 'production' ||
-  process.env.ENABLE_STARTUP_JOBS !== 'false';
+
 
 @Module({
   controllers: [AppController],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
-    BullModule.forRoot({
-      connection: {
-        host: (process.env.REDIS_HOST ?? 'localhost')
-          .replace(/^https?:\/\//, '')
-          .replace(/^rediss?:\/\//, '')
-          .replace(/\/.*$/, ''),
-        port: Number(process.env.REDIS_PORT ?? 6379),
-        password: process.env.REDIS_PASSWORD || undefined,
-        tls:
-          process.env.REDIS_TLS === 'true' ||
-          (process.env.REDIS_HOST &&
-            process.env.REDIS_HOST.includes('upstash.io'))
-            ? {}
-            : undefined,
-      },
-    }),
-    // Bull-Board dashboard at /admin/queues — gated by AdminController's JWT + role guard
-    BullBoardModule.forRoot({
-      route: '/admin/queues',
-      adapter: ExpressAdapter,
-    }),
+
     PrismaModule,
     ProvidersModule,
     AuthModule,
@@ -80,10 +56,6 @@ export class AppModule implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    if (!startupJobsEnabled) {
-      return;
-    }
-
     await this.seedSuperAdmin();
   }
 
