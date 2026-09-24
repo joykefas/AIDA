@@ -33,6 +33,13 @@ export class TutorService {
       where: { id: userId },
     });
     const learningStyle = user.learningStyle as LearningStyle | null;
+    const userLearningPreferences = (user.learningPreferences ??
+      []) as LearningStyle[];
+    // Prefer per-request override over stored preferences
+    const effectiveLearningMethods =
+      dto.learningMethods && dto.learningMethods.length > 0
+        ? dto.learningMethods
+        : (userLearningPreferences as unknown as import('@aida/shared').LearningMethod[]);
 
     let topicIds: string[] = [];
     if (dto.topicId) {
@@ -85,6 +92,7 @@ export class TutorService {
         text: c.chunk,
       })),
       learningStyle,
+      learningMethods: effectiveLearningMethods,
       simplify: Boolean(dto.simplify),
       history,
     });

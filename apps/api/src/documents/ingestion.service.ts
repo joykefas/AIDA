@@ -53,8 +53,8 @@ export class IngestionService {
    * so that the HTTP controller can return immediately (201 Created) without blocking the user.
    */
   processDocumentAsync(documentId: string, type: DocType): void {
-    setImmediate(async () => {
-      await this.runPipeline(documentId, type);
+    setImmediate(() => {
+      void this.runPipeline(documentId, type);
     });
   }
 

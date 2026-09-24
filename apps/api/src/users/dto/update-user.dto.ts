@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsEnum,
   IsOptional,
   IsString,
@@ -7,7 +8,11 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { LearningStyle, UpdateProfileRequest } from '@aida/shared';
+import {
+  LearningMethod,
+  LearningStyle,
+  UpdateProfileRequest,
+} from '@aida/shared';
 
 export class UpdateUserDto implements UpdateProfileRequest {
   @IsOptional()
@@ -29,4 +34,9 @@ export class UpdateUserDto implements UpdateProfileRequest {
   @IsOptional()
   @IsEnum(LearningStyle)
   learningStyle?: LearningStyle;
+
+  @IsOptional()
+  @IsArray()
+  @IsEnum(LearningMethod, { each: true })
+  learningPreferences?: LearningMethod[];
 }

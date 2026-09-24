@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { LearningStyle } from '@aida/shared';
+import {
+  LearningMethod,
+  LearningStyle,
+  AdaptedPresentationResponse,
+} from '@aida/shared';
 import {
   LlmProvider,
   GeneratedContent,
@@ -7,6 +11,7 @@ import {
   TutorAnswerOutput,
   GradeWrittenInput,
   GradeWrittenOutput,
+  GenerateAdaptedPresentationInput,
 } from '../llm.provider';
 
 /** Deterministic string hash so mock output is stable across calls (useful for demos/tests). */
@@ -95,7 +100,7 @@ export class MockLlmProvider extends LlmProvider {
     await Promise.resolve();
     const sectionCount = Math.min(
       5,
-      Math.max(3, Math.ceil(input.rawText.length / 400)),
+      Math.max(1, Math.ceil(input.rawText.length / 400)),
     );
     const chunks = splitIntoChunks(input.rawText || input.title, sectionCount);
     const filledChunks =
@@ -239,5 +244,134 @@ export class MockLlmProvider extends LlmProvider {
           : `This needs another pass — the core idea isn't coming through yet.${styleNote} Re-read the relevant notes and try re-explaining it in one sentence before expanding.`;
 
     return { score: Math.round(score * 100) / 100, feedback };
+  }
+
+  async generateAdaptedPresentation(
+    input: GenerateAdaptedPresentationInput,
+  ): Promise<AdaptedPresentationResponse['content']> {
+    await Promise.resolve();
+    const { topicTitle, summary, notes, method } = input;
+    const bullets = notes.flatMap((n) => n.bullets);
+
+    switch (method) {
+      case LearningMethod.VISUAL: {
+        const nodeLines = notes
+          .slice(0, 4)
+          .map(
+            (n, i) =>
+              `  N${i + 1}["${n.heading.replace(/"/g, "'")}"] --> D${i + 1}["${(n.bullets[0] ?? 'Core insight').slice(0, 40).replace(/"/g, "'")}"]`,
+          )
+          .join('\n');
+        const mermaid = `graph TD\n  Root["${topicTitle.replace(/"/g, "'")}"]\n${nodeLines}`;
+        return {
+          visual: {
+            diagramType: 'mermaid',
+            mermaidCode: mermaid,
+            charts: [
+              {
+                title: 'Concept Architecture',
+                explanation: `Visual breakdown of how key components in ${topicTitle} interconnect and build upon each other.`,
+              },
+            ],
+            visualBreakdown: notes.map((n) => ({
+              title: n.heading,
+              content: n.bullets.join(' '),
+              keyTakeaway: n.bullets[0] ?? 'Key structural concept',
+            })),
+          },
+        };
+      }
+      case LearningMethod.STORIES_ANALOGIES: {
+        return {
+          storiesAnalogies: {
+            coreStory: {
+              title: `The Story of ${topicTitle}`,
+              narrative: `Picture an architect designing a resilient city. Rather than building everything at once, each subsystem in ${topicTitle} operates like a dedicated district. ${summary || bullets[0] || 'Every part plays a distinct role in keeping the entire system operating cohesively.'}`,
+              moralOrTakeaway: `Just like a city thrives when its districts communicate smoothly, mastering ${topicTitle} depends on understanding how these individual components coordinate.`,
+            },
+            analogies: notes.map((n, i) => ({
+              concept: n.heading,
+              analogy:
+                i === 0
+                  ? `Like the foundational blueprints of a bridge, ensuring stability under pressure.`
+                  : i === 1
+                    ? `Like a conductor keeping an orchestra in rhythm without playing the instruments directly.`
+                    : `Like a courier dispatching urgent parcels along optimal highways.`,
+              whyItWorks: `It takes the abstract principles of ${n.heading} and grounds them in a dynamic everyday mechanism you intuitively recognize.`,
+            })),
+          },
+        };
+      }
+      case LearningMethod.PRACTICAL_EXAMPLES: {
+        return {
+          practicalExamples: {
+            examples: notes.map((n, i) => ({
+              title: `Real-World Case #${i + 1}: ${n.heading}`,
+              context: `How industry teams encounter ${n.heading} during live operations or problem-solving.`,
+              demonstration:
+                n.bullets[0] ??
+                `Step 1: Identify input parameters. Step 2: Apply ${n.heading} guidelines. Step 3: Validate the outcome against benchmarks.`,
+              realWorldImpact: `Prevents common bottlenecks and ensures reliable, predictable execution in production environments.`,
+            })),
+          },
+        };
+      }
+      case LearningMethod.SCENARIOS: {
+        return {
+          scenarios: {
+            scenarios: notes.map((n, i) => ({
+              title: `Scenario ${i + 1}: Deploying ${n.heading} Under Pressure`,
+              scenario: `A critical project deadline is 48 hours away. Your team encounters a conflict relating to ${n.heading}. Initial data indicates inconsistent outputs.`,
+              challenge: `How do you triage the root cause without disrupting existing workflows?`,
+              optimalApproach: `Leverage the principles of ${n.heading}: ${n.bullets[0] ?? 'Isolate variables and trace data flow step-by-step.'}`,
+              analysis: `By adhering to the structured rules of ${topicTitle}, you eliminate guesswork and resolve the incident systematically.`,
+            })),
+          },
+        };
+      }
+      case LearningMethod.STEP_BY_STEP: {
+        return {
+          stepByStep: {
+            overview: `Progressive walkthrough to master ${topicTitle} step-by-step from fundamental principles to practical mastery.`,
+            steps: notes.map((n, i) => ({
+              stepNumber: i + 1,
+              title: n.heading,
+              explanation:
+                n.bullets.join(' ') ||
+                `Mastering this phase provides the foundation for subsequent topics.`,
+              keyActionOrRule: `Rule ${i + 1}: Keep ${n.heading} clearly scoped before moving to subsequent implementations.`,
+              quickCheckQuestion: `What is the primary objective of ${n.heading}?`,
+              quickCheckAnswer:
+                n.bullets[0] ??
+                `To establish a reliable baseline according to ${topicTitle}.`,
+            })),
+          },
+        };
+      }
+      case LearningMethod.AUDIO: {
+        return {
+          audioLesson: {
+            title: `Audio Masterclass: ${topicTitle}`,
+            intro: `Welcome to this spoken lesson on ${topicTitle}. In this session, we'll walk through the core ideas simply, clearly, and naturally, so you can learn on the go.`,
+            sections: notes.map((n) => ({
+              heading: n.heading,
+              spokenText: `Let's focus on ${n.heading}. ${n.bullets.join('. ')}. Keep in mind why this matters: it establishes how the rest of the material connects together.`,
+            })),
+            recap: `To wrap up our listen: remember that ${topicTitle} centers on these key pillars. Replay this anytime while commuting or taking a walk to solidify your recall.`,
+            durationEstimateMinutes: Math.max(
+              2,
+              Math.ceil((bullets.join(' ').length + 200) / 750),
+            ),
+          },
+        };
+      }
+      case LearningMethod.DIRECT_NOTES:
+      default: {
+        return {
+          directNotes: notes,
+          markdown: `## ${topicTitle}\n\n${summary}\n\n${notes.map((n) => `### ${n.heading}\n${n.bullets.map((b) => `- ${b}`).join('\n')}`).join('\n\n')}`,
+        };
+      }
+    }
   }
 }
