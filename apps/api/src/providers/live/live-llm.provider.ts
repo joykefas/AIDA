@@ -10,19 +10,143 @@ import {
   GradeWrittenOutput,
 } from '../llm.provider';
 
-function cleanJsonResponse(text: string): string {
-  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-  const match = cleaned.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  if (match) {
-    cleaned = match[1].trim();
-  } else {
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+function repairTruncatedJson(str: string): string {
+  let inString = false;
+  let isEscaped = false;
+  const stack: string[] = [];
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (ch === '\\') {
+        isEscaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+    } else {
+      if (ch === '"') {
+        inString = true;
+      } else if (ch === '{' || ch === '[') {
+        stack.push(ch);
+      } else if (ch === '}' || ch === ']') {
+        if (stack.length > 0) {
+          const last = stack[stack.length - 1];
+          if ((ch === '}' && last === '{') || (ch === ']' && last === '[')) {
+            stack.pop();
+          }
+        }
+      }
     }
   }
-  return cleaned;
+
+  let repaired = str;
+  if (inString) {
+    repaired += '"';
+  }
+
+  repaired = repaired.replace(/,\s*$/, '');
+
+  while (stack.length > 0) {
+    const open = stack.pop();
+    repaired = repaired.replace(/,\s*$/, '');
+    if (open === '{') repaired += '}';
+    else if (open === '[') repaired += ']';
+  }
+
+  return repaired;
+}
+
+function extractBalancedJson(raw: string): string {
+  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // If wrapped in or contains a markdown code fence, inspect that first
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const candidate = fenceMatch ? fenceMatch[1].trim() : cleaned;
+
+  const startObj = candidate.indexOf('{');
+  const startArr = candidate.indexOf('[');
+  let startIdx = -1;
+  let openChar = '{';
+  let closeChar = '}';
+
+  if (startObj !== -1 && (startArr === -1 || startObj < startArr)) {
+    startIdx = startObj;
+    openChar = '{';
+    closeChar = '}';
+  } else if (startArr !== -1) {
+    startIdx = startArr;
+    openChar = '[';
+    closeChar = ']';
+  }
+
+  if (startIdx === -1) {
+    return candidate;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = startIdx; i < candidate.length; i++) {
+    const ch = candidate[i];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (ch === '\\') {
+        isEscaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+    } else {
+      if (ch === '"') {
+        inString = true;
+      } else if (ch === openChar) {
+        depth++;
+      } else if (ch === closeChar) {
+        depth--;
+        if (depth === 0) {
+          return candidate.substring(startIdx, i + 1);
+        }
+      }
+    }
+  }
+
+  return repairTruncatedJson(candidate.substring(startIdx));
+}
+
+function cleanJsonResponse(text: string): string {
+  const extracted = extractBalancedJson(text);
+  return extracted.replace(/,\s*([}\]])/g, '$1').trim();
+}
+
+function parseLlmJson<T>(raw: string, fallback?: T): T {
+  const cleaned = cleanJsonResponse(raw);
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const posMatch = message.match(/position (\d+)/i);
+    if (posMatch) {
+      const pos = parseInt(posMatch[1], 10);
+      if (pos > 0 && pos < cleaned.length) {
+        try {
+          const cut = cleaned.substring(0, pos).trim();
+          return JSON.parse(cut) as T;
+        } catch {
+          // continue
+        }
+      }
+    }
+
+    if (fallback !== undefined) {
+      return fallback;
+    }
+    throw err;
+  }
 }
 
 function toSafeString(val: unknown): string {
@@ -406,18 +530,28 @@ export class LiveLlmProvider extends LlmProvider {
       ? ` Explain in a style suited to: ${input.learningStyle}.`
       : '';
     const system =
-      `You generate study notes as JSON with this shape: ` +
+      `You generate study notes as JSON with this exact shape: ` +
       `{"topics":[{"title":"...","summary":"...","notes":[{"heading":"...","anchor":"...","bullets":["..."]}],` +
       `"mindMap":{"nodes":[{"id":"...","label":"...","noteAnchor":"..."}],"edges":[{"source":"...","target":"..."}]},` +
       `"quizQuestions":[{"type":"MCQ|WRITTEN","prompt":"...","options":[{"id":"a","text":"..."}],"correctAnswer":"..."}]}]}.` +
-      ` Identify 1-5 logical topics/sections from the material and generate separate notes for each.${stylePrompt}`;
+      ` Identify 1-5 logical topics/sections from the material and generate separate notes for each.${stylePrompt}` +
+      ` Respond ONLY with the valid JSON object and nothing else. No conversational prelude or outro. Keep notes high-yield, concise, and structured.`;
     const content = await this.chatComplete(
       system,
       `Title: ${input.title}\n\nMaterial:\n${material}`,
       true,
     );
-    const cleaned = cleanJsonResponse(content);
-    const parsed = JSON.parse(cleaned) as unknown;
+    const parsed = parseLlmJson<unknown>(content, {
+      topics: [
+        {
+          title: input.title,
+          summary: '',
+          notes: [],
+          mindMap: { nodes: [], edges: [] },
+          quizQuestions: [],
+        },
+      ],
+    });
     return normalizeGeneratedContent(parsed, input.title);
   }
 
@@ -482,13 +616,15 @@ export class LiveLlmProvider extends LlmProvider {
     const styleNote = input.learningStyle
       ? ` Phrase all qualitative feedback to match the student's learning style preference: ${input.learningStyle} (e.g. use diagrams/analogies/stories/formulas/audio-style language as appropriate).`
       : '';
-    const system = `Grade the student answer against the prompt and reference answer. Respond as JSON: {"score": 0-1, "feedback": "specific, qualitative feedback"}.${styleNote}`;
+    const system = `Grade the student answer against the prompt and reference answer. Respond as JSON: {"score": 0-1, "feedback": "specific, qualitative feedback"}.${styleNote} Respond ONLY with the valid JSON object.`;
     const content = await this.chatComplete(
       system,
       `Prompt: ${input.prompt}\nReference answer: ${input.correctAnswer ?? '(none provided)'}\nStudent answer: ${input.studentAnswer}`,
       true,
     );
-    const cleaned = cleanJsonResponse(content);
-    return JSON.parse(cleaned) as GradeWrittenOutput;
+    return parseLlmJson<GradeWrittenOutput>(content, {
+      score: 0.5,
+      feedback: 'Answer submitted and reviewed.',
+    });
   }
 }
