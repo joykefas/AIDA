@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Home, Library, MessageCircle, CalendarClock, TrendingUp, Settings } from "lucide-react";
 import { cn } from "cn";
 import { LogoutButton } from "@/components/logout-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { UserProfile } from "@aida/shared";
 
 const NAV = [
@@ -55,6 +56,7 @@ export function AppShell({ user, children }: { user: UserProfile; children: Reac
             {(user.displayName ?? user.email)[0]?.toUpperCase()}
           </div>
           <span className="min-w-0 flex-1 truncate">{user.displayName ?? user.email}</span>
+          <ThemeToggle />
           <LogoutButton />
         </div>
       </aside>
@@ -66,7 +68,8 @@ export function AppShell({ user, children }: { user: UserProfile; children: Reac
           <Image src="/brand/dark_logo_single.png" alt="AIDA" width={22} height={22} className="hidden dark:block" />
           <span className="font-heading text-base font-semibold tracking-tight">AIDA</span>
         </Link>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
           <div className="flex size-7 items-center justify-center rounded-full bg-brand-100 text-xs font-medium text-brand-700 dark:bg-brand-900 dark:text-brand-200">
             {(user.displayName ?? user.email)[0]?.toUpperCase()}
           </div>

@@ -105,20 +105,29 @@ export default function AdminOverviewPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Est. AI Spend (Groq / Cloudflare)</span>
-            <Zap className="size-4 text-amber-500" />
+        <div className="rounded-2xl border border-border bg-card p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Est. AI Spend (Groq / Cloudflare)</span>
+              <Zap className="size-4 text-amber-500" />
+            </div>
+            <p className="mt-3 font-heading text-3xl font-bold">
+              ${stats.estimatedSpendUsd !== undefined ? stats.estimatedSpendUsd.toFixed(2) : "0.00"}
+            </p>
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Cpu className="size-3.5 text-muted-foreground" />
+              <span>
+                ~{stats.estimatedTokensUsed ? Math.round(stats.estimatedTokensUsed / 1000) : 0}k tokens processed
+              </span>
+            </div>
           </div>
-          <p className="mt-3 font-heading text-3xl font-bold">
-            ${stats.estimatedSpendUsd !== undefined ? stats.estimatedSpendUsd.toFixed(2) : "0.00"}
-          </p>
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Cpu className="size-3.5 text-muted-foreground" />
-            <span>
-              ~{stats.estimatedTokensUsed ? Math.round(stats.estimatedTokensUsed / 1000) : 0}k tokens processed
-            </span>
-          </div>
+          <Link
+            href="/admin/spend"
+            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+          >
+            <span>View spend analytics &amp; calculator</span>
+            <ArrowRight className="size-3" />
+          </Link>
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5">
@@ -377,11 +386,22 @@ export default function AdminOverviewPage() {
       {/* Top Cost Outlier Users */}
       {stats.userOutliers && stats.userOutliers.length > 0 && (
         <div className="rounded-2xl border border-border bg-card p-6">
-          <div className="flex items-center gap-2">
-            <Zap className="size-4 text-amber-500" />
-            <h2 className="font-heading text-lg font-semibold">Top AI Cost Outliers</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <Zap className="size-4 text-amber-500" />
+                <h2 className="font-heading text-lg font-semibold">Top AI Cost Outliers</h2>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">Top 5 accounts by estimated AI token consumption.</p>
+            </div>
+            <Link
+              href="/admin/spend"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400"
+            >
+              <span>View spend for all users &amp; calculator</span>
+              <ArrowRight className="size-3.5" />
+            </Link>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">Top 5 accounts by estimated AI token consumption.</p>
           <div className="mt-5 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

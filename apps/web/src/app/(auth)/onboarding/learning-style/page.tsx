@@ -9,11 +9,11 @@ import { clientFetch } from "@/lib/api-client";
 import { LearningStyle } from "@aida/shared";
 
 const STYLES: { value: LearningStyle; label: string; blurb: string; icon: typeof Shapes }[] = [
-  { value: LearningStyle.DIAGRAMS, label: "Diagrams", blurb: "Show me how the pieces connect.", icon: Shapes },
-  { value: LearningStyle.STORIES, label: "Stories", blurb: "Wrap it in a narrative I can follow.", icon: BookOpen },
-  { value: LearningStyle.ANALOGIES, label: "Analogies", blurb: "Map it onto something I already know.", icon: Sparkles },
-  { value: LearningStyle.FORMULAS, label: "Formulas", blurb: "Give it to me precise and compact.", icon: Sigma },
-  { value: LearningStyle.AUDIO, label: "Audio", blurb: "Explain it like you're talking me through it.", icon: Headphones },
+  { value: LearningStyle.DIAGRAMS, label: "Diagrams", blurb: "Show me how the pieces connect with visual breakdowns.", icon: Shapes },
+  { value: LearningStyle.STORIES, label: "Stories", blurb: "Wrap explanations in a narrative I can follow.", icon: BookOpen },
+  { value: LearningStyle.ANALOGIES, label: "Analogies", blurb: "Map concepts onto everyday examples I already know.", icon: Sparkles },
+  { value: LearningStyle.FORMULAS, label: "Formulas", blurb: "Give it to me with step-by-step logic and precision.", icon: Sigma },
+  { value: LearningStyle.AUDIO, label: "Audio", blurb: "Explain it conversationally like you're talking me through it.", icon: Headphones },
 ];
 
 export default function LearningStylePage() {
@@ -36,11 +36,11 @@ export default function LearningStylePage() {
     <div className="flex w-full max-w-2xl flex-col items-center gap-8 text-center">
       <div className="flex flex-col gap-2">
         <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-          How do you learn best?
+          How should your AI Tutor teach you?
         </h1>
         <p className="text-muted-foreground">
-          Every explanation, notes, tutor answers, and quiz feedback, will match this. You can
-          change it anytime.
+          Choose how your AI Tutor explains concepts and answers your questions during study sessions.
+          You can change this anytime in your settings.
         </p>
       </div>
 

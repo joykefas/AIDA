@@ -129,3 +129,43 @@ export interface AdminAuditLogItem {
   metadata: Record<string, any> | null;
   createdAt: string;
 }
+
+export interface AdminUserSpendBreakdown {
+  documentsTokens: number;
+  documentsSpendUsd: number;
+  messagesTokens: number;
+  messagesSpendUsd: number;
+  quizzesTokens: number;
+  quizzesSpendUsd: number;
+}
+
+export interface AdminUserSpendItem {
+  userId: string;
+  userEmail: string;
+  displayName: string | null;
+  role: UserRole;
+  isMinor: boolean;
+  documentCount: number;
+  messageCount: number;
+  quizCount: number;
+  estimatedTokens: number;
+  estimatedSpendUsd: number;
+  breakdown: AdminUserSpendBreakdown;
+  createdAt: string;
+}
+
+export interface AdminSpendSummary {
+  totalSpendUsd: number;
+  totalTokensUsed: number;
+  totalUsersCount: number;
+  activeAiUsersCount: number;
+  averageSpendPerUser: number;
+  averageTokensPerUser: number;
+  pricingRates: {
+    costPerMillionTokens: number;
+    tokensPerDocument: number;
+    tokensPerMessage: number;
+    tokensPerQuiz: number;
+  };
+  users: AdminUserSpendItem[];
+}

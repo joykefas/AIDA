@@ -14,8 +14,10 @@ import {
   AdminOverviewStats,
   AdminQualityData,
   AdminQualitySampleItem,
+  AdminSpendSummary,
   AdminUserCostOutlier,
   AdminUserListItem,
+  AdminUserSpendItem,
   ProcessingStatus,
   QuestionType,
   UserRole,
@@ -199,9 +201,9 @@ export class AdminService implements OnModuleInit {
       };
     });
 
-    // 2. Top 5 Cost Outlier Users
+    // 2. Top 5 Cost Outlier Users (sample up to 200 users for platform outliers)
     const topUsers = await this.prisma.user.findMany({
-      take: 50,
+      take: 200,
       select: {
         id: true,
         email: true,
@@ -553,5 +555,160 @@ export class AdminService implements OnModuleInit {
       },
     });
     return this.usersService.deleteAccount(targetUserId);
+  }
+
+  async getUserSpendSummary(params?: {
+    search?: string;
+    role?: UserRole;
+    isMinor?: boolean;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<AdminSpendSummary> {
+    const where: Prisma.UserWhereInput = {};
+    if (params?.isMinor !== undefined) where.isMinor = params.isMinor;
+    if (params?.role) where.role = params.role;
+    if (params?.search && params.search.trim()) {
+      where.OR = [
+        { email: { contains: params.search.trim(), mode: 'insensitive' } },
+        {
+          displayName: { contains: params.search.trim(), mode: 'insensitive' },
+        },
+      ];
+    }
+
+    const users = await this.prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isMinor: true,
+        createdAt: true,
+        _count: {
+          select: {
+            documents: true,
+            tutorMessages: true,
+            quizAttempts: true,
+          },
+        },
+      },
+    });
+
+    const costPerMillionTokens = 0.15;
+    const tokensPerDocument = 3000;
+    const tokensPerMessage = 1500;
+    const tokensPerQuiz = 1000;
+
+    let totalSpendUsd = 0;
+    let totalTokensUsed = 0;
+    let activeAiUsersCount = 0;
+
+    const userSpendItems: AdminUserSpendItem[] = users.map((u) => {
+      const docCount = u._count.documents;
+      const msgCount = u._count.tutorMessages;
+      const quizCount = u._count.quizAttempts;
+
+      const documentsTokens = docCount * tokensPerDocument;
+      const documentsSpendUsd = Number(
+        ((documentsTokens / 1_000_000) * costPerMillionTokens).toFixed(4),
+      );
+
+      const messagesTokens = msgCount * tokensPerMessage;
+      const messagesSpendUsd = Number(
+        ((messagesTokens / 1_000_000) * costPerMillionTokens).toFixed(4),
+      );
+
+      const quizzesTokens = quizCount * tokensPerQuiz;
+      const quizzesSpendUsd = Number(
+        ((quizzesTokens / 1_000_000) * costPerMillionTokens).toFixed(4),
+      );
+
+      const estimatedTokens = documentsTokens + messagesTokens + quizzesTokens;
+      const estimatedSpendUsd = Number(
+        ((estimatedTokens / 1_000_000) * costPerMillionTokens).toFixed(4),
+      );
+
+      totalTokensUsed += estimatedTokens;
+      totalSpendUsd += estimatedSpendUsd;
+      if (docCount > 0 || msgCount > 0 || quizCount > 0) {
+        activeAiUsersCount++;
+      }
+
+      return {
+        userId: u.id,
+        userEmail: u.email,
+        displayName: u.displayName,
+        role: u.role as UserRole,
+        isMinor: u.isMinor,
+        documentCount: docCount,
+        messageCount: msgCount,
+        quizCount: quizCount,
+        estimatedTokens,
+        estimatedSpendUsd,
+        breakdown: {
+          documentsTokens,
+          documentsSpendUsd,
+          messagesTokens,
+          messagesSpendUsd,
+          quizzesTokens,
+          quizzesSpendUsd,
+        },
+        createdAt: u.createdAt.toISOString(),
+      };
+    });
+
+    // Sorting
+    const sortBy = params?.sortBy ?? 'spend';
+    const sortOrder = params?.sortOrder ?? 'desc';
+    const multiplier = sortOrder === 'asc' ? 1 : -1;
+
+    userSpendItems.sort((a, b) => {
+      if (sortBy === 'tokens') {
+        return (a.estimatedTokens - b.estimatedTokens) * multiplier;
+      }
+      if (sortBy === 'documents') {
+        return (a.documentCount - b.documentCount) * multiplier;
+      }
+      if (sortBy === 'messages') {
+        return (a.messageCount - b.messageCount) * multiplier;
+      }
+      if (sortBy === 'quizzes') {
+        return (a.quizCount - b.quizCount) * multiplier;
+      }
+      if (sortBy === 'createdAt') {
+        return (
+          (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) *
+          multiplier
+        );
+      }
+      // default: spend
+      return (a.estimatedSpendUsd - b.estimatedSpendUsd) * multiplier;
+    });
+
+    const totalUsersCount = users.length;
+    const averageSpendPerUser =
+      totalUsersCount > 0
+        ? Number((totalSpendUsd / totalUsersCount).toFixed(4))
+        : 0;
+    const averageTokensPerUser =
+      totalUsersCount > 0 ? Math.round(totalTokensUsed / totalUsersCount) : 0;
+
+    return {
+      totalSpendUsd: Number(totalSpendUsd.toFixed(4)),
+      totalTokensUsed,
+      totalUsersCount,
+      activeAiUsersCount,
+      averageSpendPerUser,
+      averageTokensPerUser,
+      pricingRates: {
+        costPerMillionTokens,
+        tokensPerDocument,
+        tokensPerMessage,
+        tokensPerQuiz,
+      },
+      users: userSpendItems,
+    };
   }
 }
