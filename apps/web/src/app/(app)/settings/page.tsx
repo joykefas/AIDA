@@ -226,9 +226,9 @@ export default function SettingsPage() {
           {/* Preferred Learning Style Section */}
           <div className="flex flex-col gap-4">
             <div>
-              <h2 className="font-heading text-lg font-medium">Preferred Learning Style</h2>
+              <h2 className="font-heading text-lg font-medium">AI Tutor Explanation Style</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                The AI Tutor, notes, and quiz feedback will explain concepts using this style.
+                Your personal AI Tutor adapts its explanations, breakdown depth, and conversational phrasing using this style.
               </p>
             </div>
 

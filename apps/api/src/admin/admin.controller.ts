@@ -29,6 +29,26 @@ export class AdminController {
     return this.adminService.getOverview();
   }
 
+  @Get('spend')
+  @Roles(UserRole.ADMIN)
+  getUserSpend(
+    @Query('search') search?: string,
+    @Query('role') role?: UserRole,
+    @Query('isMinor') isMinor?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+  ) {
+    const isMinorBool =
+      isMinor === 'true' ? true : isMinor === 'false' ? false : undefined;
+    return this.adminService.getUserSpendSummary({
+      search,
+      role,
+      isMinor: isMinorBool,
+      sortBy,
+      sortOrder,
+    });
+  }
+
   @Get('users')
   @Roles(UserRole.ADMIN, UserRole.SUPPORT)
   getUsers(

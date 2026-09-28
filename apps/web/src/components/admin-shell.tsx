@@ -12,10 +12,12 @@ import {
   MessageCircle,
   ShieldAlert,
   Menu,
-  X
+  X,
+  Coins,
 } from "lucide-react";
 import { cn } from "cn";
 import { LogoutButton } from "@/components/logout-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { type UserProfile } from "@aida/shared";
 
 interface AdminNavItem {
@@ -27,6 +29,7 @@ interface AdminNavItem {
 
 const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: "/admin", label: "Overview", icon: BarChart3, exact: true },
+  { href: "/admin/spend", label: "AI Spend & Costs", icon: Coins },
   { href: "/admin/users", label: "Users & Consent", icon: Users },
   { href: "/admin/quality", label: "Quality & Diagnostics", icon: CheckSquare },
   { href: "/admin/compliance", label: "Compliance & Audit", icon: FileText },
@@ -100,6 +103,7 @@ export function AdminShell({ user, children }: { user: UserProfile; children: Re
               {user.role}
             </span>
           </div>
+          <ThemeToggle />
           <LogoutButton redirectTo="/admin/login" className="hover:bg-destructive/10 hover:text-destructive" />
         </div>
       </aside>
@@ -115,6 +119,7 @@ export function AdminShell({ user, children }: { user: UserProfile; children: Re
           </span>
         </Link>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <LogoutButton redirectTo="/admin/login" />
           <button
             type="button"
