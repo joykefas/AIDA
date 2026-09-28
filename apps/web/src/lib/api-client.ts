@@ -44,11 +44,13 @@ async function readErrorMessage(res: Response): Promise<string> {
 }
 
 let refreshInFlight: Promise<boolean> | null = null;
+let isRefreshingPage = false;
 
 async function tryRefresh(): Promise<boolean> {
   if (!refreshInFlight) {
     refreshInFlight = rawFetch("/auth/refresh", { method: "POST" })
       .then((res) => res.ok)
+      .catch(() => false)
       .finally(() => {
         refreshInFlight = null;
       });
@@ -56,17 +58,50 @@ async function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+function isAuthPage(): boolean {
+  if (typeof window === "undefined") return false;
+  const p = window.location.pathname;
+  return (
+    p === "/login" ||
+    p === "/register" ||
+    p === "/admin/login" ||
+    p === "/session-expired" ||
+    p.startsWith("/reset-password") ||
+    p.startsWith("/forgot-password")
+  );
+}
+
+function refreshPage() {
+  if (typeof window === "undefined") return;
+  try {
+    window.location.reload();
+  } catch {
+    window.location.href = window.location.href;
+  }
+}
+
 /** Client Component fetch — goes through the /api/:path* rewrite in next.config.ts so
  * the browser sees a same-origin request and the API's cookies attach normally.
  * On a 401 (expired 15-minute access token) it attempts one silent refresh via
- * the 30-day refresh cookie before giving up, so the app shell doesn't log
- * someone out just because they left a tab open past the access-token TTL. */
+ * the 30-day refresh cookie before giving up. If refreshing the token fails or the
+ * retried request also returns 401 unauthorized, it refreshes the page so the
+ * proxy middleware automatically redirects the user to login. */
 export async function clientFetch<T>(path: string, init?: RequestInit): Promise<T> {
   let res = await rawFetch(path, init);
 
   if (res.status === 401 && !path.startsWith("/auth/")) {
     const refreshed = await tryRefresh();
-    if (refreshed) res = await rawFetch(path, init);
+    if (refreshed) {
+      res = await rawFetch(path, init);
+    }
+
+    if (!refreshed || res.status === 401) {
+      if (!isRefreshingPage && !isAuthPage()) {
+        isRefreshingPage = true;
+        refreshPage();
+      }
+      return new Promise<never>(() => {});
+    }
   }
 
   if (!res.ok) {
