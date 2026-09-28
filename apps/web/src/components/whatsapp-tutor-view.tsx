@@ -23,6 +23,11 @@ import {
   RefreshCw,
   Sliders,
   MessageSquare,
+  Lightbulb,
+  HelpCircle,
+  ListOrdered,
+  Pin,
+  Paperclip,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -41,6 +46,40 @@ const FILTER_TABS: { id: ThreadFilterType; label: string }[] = [
   { id: "pdf", label: "PDFs" },
   { id: "audio", label: "Audio" },
   { id: "youtube", label: "YouTube" },
+];
+
+const QUICK_PROMPTS = [
+  {
+    icon: Lightbulb,
+    label: "Key takeaways",
+    text: "What are the main takeaways from this material?",
+    iconColor: "text-amber-500 dark:text-amber-400",
+  },
+  {
+    icon: HelpCircle,
+    label: "Quiz me",
+    text: "Generate 3 quick practice questions to test my understanding.",
+    iconColor: "text-rose-500 dark:text-rose-400",
+  },
+  {
+    icon: Sparkles,
+    label: "Explain simply",
+    text: "Explain this in simple terms using a relatable analogy.",
+    iconColor: "text-brand-500 dark:text-brand-400",
+  },
+  {
+    icon: ListOrdered,
+    label: "Step-by-step logic",
+    text: "Walk me through the logical steps in detail.",
+    iconColor: "text-emerald-500 dark:text-emerald-400",
+  },
+];
+
+const EMPTY_STATE_PROMPTS = [
+  { icon: BookOpen, text: "Can you summarize this material?" },
+  { icon: Lightbulb, text: "What are the most important concepts?" },
+  { icon: Sparkles, text: "Give me a real-world example" },
+  { icon: HelpCircle, text: "Quiz me on key points" },
 ];
 
 let localMsgCounter = 0;
@@ -391,11 +430,11 @@ export function WhatsAppTutorView() {
   const activeTopicObj = activeThread.topics.find((t) => t.id === selectedTopicId);
 
   return (
-    <div className="flex h-[calc(100svh-5.5rem)] w-full rounded-2xl border border-border bg-card shadow-lg shadow-black/5 overflow-hidden">
+    <div className="flex h-full w-full bg-background overflow-hidden min-w-0">
       {/* ─── LEFT PANE: Conversation List (WhatsApp Style) ─────────────────────────── */}
       <aside
         className={cn(
-          "w-full md:w-80 lg:w-[360px] shrink-0 border-r border-border flex flex-col bg-card/70 backdrop-blur-md",
+          "w-full md:w-80 lg:w-[360px] shrink-0 border-r border-border flex flex-col bg-card/70 backdrop-blur-md h-full min-w-0",
           mobileChatOpen ? "hidden md:flex" : "flex",
         )}
       >
@@ -578,12 +617,12 @@ export function WhatsAppTutorView() {
       {/* ─── RIGHT PANE: Active Conversation & Topic Filter (WhatsApp Style) ──────── */}
       <main
         className={cn(
-          "flex-1 flex-col h-full bg-background relative overflow-hidden",
+          "flex-1 flex-col h-full bg-background relative overflow-hidden min-w-0",
           mobileChatOpen ? "flex" : "hidden md:flex",
         )}
       >
         {/* Top Header Bar */}
-        <header className="h-16 px-4 border-b border-border bg-card/90 flex items-center justify-between gap-3 z-10 backdrop-blur-md">
+        <header className="h-16 px-4 border-b border-border bg-card/90 flex items-center justify-between gap-3 z-10 backdrop-blur-md shrink-0 min-w-0">
           <div className="flex items-center gap-3 min-w-0">
             {/* Mobile back button */}
             <button
@@ -663,7 +702,10 @@ export function WhatsAppTutorView() {
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
-                      <span className="truncate">📚 All Topics in Material</span>
+                      <span className="truncate flex items-center gap-2">
+                        <BookOpen className="size-3.5 text-muted-foreground shrink-0" />
+                        <span>All Topics in Material</span>
+                      </span>
                       {selectedTopicId === null && <Check className="size-3.5 text-brand-500 shrink-0" />}
                     </button>
 
@@ -688,7 +730,10 @@ export function WhatsAppTutorView() {
                                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
                             )}
                           >
-                            <span className="truncate pr-2">📌 {t.title}</span>
+                            <span className="truncate pr-2 flex items-center gap-2">
+                              <Pin className="size-3 text-brand-500 shrink-0" />
+                              <span>{t.title}</span>
+                            </span>
                             {isSelected && <Check className="size-3.5 text-brand-500 shrink-0" />}
                           </button>
                         );
@@ -726,7 +771,7 @@ export function WhatsAppTutorView() {
         {/* ─── Chat Body: Messages Thread (WhatsApp Style) ─────────────────────────── */}
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-3 relative bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)]"
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden p-3.5 sm:p-6 flex flex-col gap-3.5 relative bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)]"
         >
           {loadingMessages ? (
             <div className="m-auto text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
@@ -745,21 +790,20 @@ export function WhatsAppTutorView() {
                 grounded in your material.
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {[
-                  "Can you summarize this material?",
-                  "What are the most important concepts?",
-                  "Give me a real-world example",
-                  "Quiz me on key points",
-                ].map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => handleSend(prompt)}
-                    className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  >
-                    {prompt}
-                  </button>
-                ))}
+                {EMPTY_STATE_PROMPTS.map((prompt) => {
+                  const Icon = prompt.icon;
+                  return (
+                    <button
+                      key={prompt.text}
+                      type="button"
+                      onClick={() => handleSend(prompt.text)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <Icon className="size-3.5 text-brand-600 shrink-0" />
+                      <span>{prompt.text}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -769,55 +813,110 @@ export function WhatsAppTutorView() {
               return (
                 <div
                   key={msg.id}
-                  className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
+                  className={cn("flex w-full min-w-0", isUser ? "justify-end" : "justify-start")}
                 >
                   {/* WhatsApp-Style User Message Bubble (Right) */}
                   {isUser ? (
-                    <div className="max-w-[85%] sm:max-w-[70%] rounded-2xl rounded-tr-xs bg-[#005c4b] dark:bg-[#005c4b] text-[#e9edef] px-4 py-2.5 shadow-sm text-sm break-words relative">
-                      <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    <div className="max-w-[85%] sm:max-w-[72%] rounded-2xl rounded-tr-xs bg-[#005c4b] dark:bg-[#005c4b] text-[#e9edef] px-4 py-2.5 shadow-sm text-sm break-words [overflow-wrap:anywhere] relative overflow-hidden">
+                      <p className="whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]">{msg.content}</p>
                       <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-emerald-200/80">
                         <span>{formatTime(msg.createdAt)}</span>
-                        <CheckCheck className="size-3 text-cyan-300" />
+                        <CheckCheck className="size-3 text-cyan-300 shrink-0" />
                       </div>
                     </div>
                   ) : (
                     /* WhatsApp-Style AI Tutor Message Bubble (Left) */
-                    <div className="flex items-start gap-2.5 max-w-[92%] sm:max-w-[85%]">
+                    <div className="flex items-start gap-2 sm:gap-2.5 max-w-[95%] sm:max-w-[85%] min-w-0 w-full sm:w-auto">
                       <div className="size-8 shrink-0 rounded-xl bg-brand-600 text-white flex items-center justify-center text-xs font-bold shadow-xs mt-0.5">
                         <Sparkles className="size-4" />
                       </div>
 
-                      <div className="rounded-2xl rounded-tl-xs bg-[#202c33] dark:bg-[#202c33] text-[#e9edef] border border-[#2a3942]/60 px-4 py-3 shadow-sm text-sm break-words flex flex-col gap-2 relative">
+                      <div className="min-w-0 flex-1 rounded-2xl rounded-tl-xs bg-[#202c33] dark:bg-[#202c33] text-[#e9edef] border border-[#2a3942]/70 px-3.5 py-3 sm:px-4 sm:py-3 shadow-sm text-sm flex flex-col gap-2 relative overflow-hidden break-words [overflow-wrap:anywhere]">
                         {/* Header inside tutor bubble */}
-                        <div className="flex items-center justify-between gap-2 border-b border-[#2a3942] pb-1.5 text-xs">
-                          <span className="font-semibold text-brand-400 flex items-center gap-1">
+                        <div className="flex items-center justify-between gap-2 border-b border-[#2a3942] pb-1.5 text-xs min-w-0">
+                          <span className="font-semibold text-brand-400 flex items-center gap-1 truncate">
                             AIDA Tutor
                           </span>
                           {msg.topicId && (
-                            <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
-                              📌 Topic Grasp
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                              <Pin className="size-2.5 text-amber-300 shrink-0" />
+                              Topic Grasp
                             </span>
                           )}
                         </div>
 
                         {/* Markdown Content */}
-                        <div className="prose prose-invert prose-sm max-w-none leading-relaxed text-[#e9edef]">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <div className="prose prose-invert prose-sm max-w-none leading-relaxed text-[#e9edef] break-words [overflow-wrap:anywhere] min-w-0">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              p: ({ children }) => (
+                                <p className="leading-relaxed break-words [overflow-wrap:anywhere] my-1 text-sm text-[#e9edef]">
+                                  {children}
+                                </p>
+                              ),
+                              pre: ({ children }) => (
+                                <pre className="max-w-full overflow-x-auto rounded-lg bg-black/50 p-3 font-mono text-xs my-2 text-slate-200 border border-white/10">
+                                  {children}
+                                </pre>
+                              ),
+                              code: ({ inline, className, children, ...props }: React.ComponentPropsWithoutRef<"code"> & { inline?: boolean }) => {
+                                return inline ? (
+                                  <code className={cn("rounded bg-white/10 px-1 py-0.5 font-mono text-xs text-brand-300 break-all", className)} {...props}>
+                                    {children}
+                                  </code>
+                                ) : (
+                                  <code className={cn("block break-words whitespace-pre font-mono text-xs text-slate-200", className)} {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              },
+                              table: ({ children }) => (
+                                <div className="w-full max-w-full overflow-x-auto my-2 rounded-lg border border-white/10">
+                                  <table className="min-w-full text-xs text-left divide-y divide-white/10">
+                                    {children}
+                                  </table>
+                                </div>
+                              ),
+                              blockquote: ({ children }) => (
+                                <blockquote className="border-l-2 border-brand-400 pl-3 italic text-slate-300 my-1.5">
+                                  {children}
+                                </blockquote>
+                              ),
+                              a: ({ href, children }) => (
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-brand-400 underline underline-offset-2 break-all hover:text-brand-300"
+                                >
+                                  {children}
+                                </a>
+                              ),
+                              ul: ({ children }) => <ul className="list-disc pl-4 space-y-1 my-1 break-words [overflow-wrap:anywhere]">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal pl-4 space-y-1 my-1 break-words [overflow-wrap:anywhere]">{children}</ol>,
+                              li: ({ children }) => <li className="break-words [overflow-wrap:anywhere] leading-relaxed">{children}</li>,
+                              h1: ({ children }) => <h1 className="text-base font-bold my-2 text-white break-words">{children}</h1>,
+                              h2: ({ children }) => <h2 className="text-sm font-bold my-1.5 text-white break-words">{children}</h2>,
+                              h3: ({ children }) => <h3 className="text-xs font-semibold my-1 text-brand-300 break-words">{children}</h3>,
+                            }}
+                          >
                             {msg.content}
                           </ReactMarkdown>
                         </div>
 
                         {/* Citations / Grounded Sources */}
                         {msg.citations && msg.citations.length > 0 && (
-                          <div className="mt-2 rounded-xl bg-black/30 p-2.5 text-xs border border-white/5">
-                            <span className="font-semibold text-brand-300 block mb-1 text-[11px] uppercase tracking-wider">
-                              📎 Grounded Citations ({msg.citations.length})
+                          <div className="mt-2 w-full max-w-full rounded-xl bg-black/40 p-2.5 text-xs border border-white/10 overflow-hidden">
+                            <span className="font-semibold text-brand-300 inline-flex items-center gap-1.5 mb-1.5 text-[11px] uppercase tracking-wider">
+                              <Paperclip className="size-3 text-brand-300 shrink-0" />
+                              Grounded Citations ({msg.citations.length})
                             </span>
-                            <div className="flex flex-col gap-1 text-[11px] text-slate-300">
+                            <div className="flex flex-col gap-1.5 text-[11px] text-slate-300">
                               {msg.citations.map((c, i) => (
-                                <div key={i} className="truncate">
-                                  • <strong className="text-white">{c.topicTitle}</strong>:{" "}
-                                  <span className="italic opacity-80">&quot;{c.excerpt}&quot;</span>
+                                <div key={i} className="break-words [overflow-wrap:anywhere] leading-relaxed text-xs">
+                                  • <strong className="text-white font-medium">{c.topicTitle}</strong>:{" "}
+                                  <span className="italic text-slate-300/90">&quot;{c.excerpt}&quot;</span>
                                 </div>
                               ))}
                             </div>
@@ -925,23 +1024,24 @@ export function WhatsAppTutorView() {
         </div>
 
         {/* Quick Suggestion Pills */}
-        <div className="px-4 py-2 border-t border-border/40 bg-card/60 flex items-center gap-2 overflow-x-auto text-[11px]">
-          <span className="text-muted-foreground font-semibold text-[10px] uppercase shrink-0">Prompts:</span>
-          {[
-            { label: "💡 Key takeaways", text: "What are the main takeaways from this material?" },
-            { label: "❓ Quiz me", text: "Generate 3 quick practice questions to test my understanding." },
-            { label: "🔍 Explain simply", text: "Explain this in simple terms using a relatable analogy." },
-            { label: "📊 Step-by-step logic", text: "Walk me through the logical steps in detail." },
-          ].map((prompt) => (
-            <button
-              key={prompt.label}
-              type="button"
-              onClick={() => handleSend(prompt.text)}
-              className="rounded-full border border-border bg-background/80 hover:bg-accent px-3 py-1 font-medium whitespace-nowrap text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {prompt.label}
-            </button>
-          ))}
+        <div className="px-3.5 sm:px-4 py-2 border-t border-border/40 bg-card/60 flex items-center gap-2 overflow-x-auto text-[11px] shrink-0">
+          <span className="text-muted-foreground font-semibold text-[10px] uppercase shrink-0 tracking-wider">
+            Prompts:
+          </span>
+          {QUICK_PROMPTS.map((prompt) => {
+            const Icon = prompt.icon;
+            return (
+              <button
+                key={prompt.label}
+                type="button"
+                onClick={() => handleSend(prompt.text)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-background/80 hover:bg-accent px-3 py-1 font-medium whitespace-nowrap text-muted-foreground hover:text-foreground transition-colors shadow-2xs"
+              >
+                <Icon className={cn("size-3.5 shrink-0", prompt.iconColor)} />
+                <span>{prompt.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* ─── Input Footer Bar (WhatsApp Style) ─────────────────────────────────── */}

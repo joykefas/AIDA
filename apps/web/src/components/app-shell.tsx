@@ -77,8 +77,19 @@ export function AppShell({ user, children }: { user: UserProfile; children: Reac
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-20 sm:pb-0 sm:h-full">
-        <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-8">{children}</div>
+      <main
+        className={cn(
+          "flex-1 min-w-0",
+          pathname.startsWith("/tutor")
+            ? "h-[calc(100svh-3.5rem)] sm:h-full overflow-hidden flex flex-col pb-16 sm:pb-0"
+            : "overflow-y-auto pb-20 sm:pb-0 sm:h-full",
+        )}
+      >
+        {pathname.startsWith("/tutor") ? (
+          <div className="h-full w-full flex-1 flex flex-col min-w-0 overflow-hidden">{children}</div>
+        ) : (
+          <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-8">{children}</div>
+        )}
       </main>
 
       {/* Mobile bottom nav */}

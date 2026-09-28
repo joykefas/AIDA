@@ -10,11 +10,7 @@ import {
   Cpu,
   Users,
   TrendingUp,
-  FileText,
-  MessageCircle,
-  CheckCircle2,
   RefreshCw,
-  Sliders,
   Sparkles,
   ArrowUpDown,
   ShieldCheck,
@@ -24,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { clientFetch } from "@/lib/api-client";
-import type { AdminSpendSummary, AdminUserSpendItem } from "@aida/shared";
+import type { AdminSpendSummary } from "@aida/shared";
 import { cn } from "cn";
 
 export default function AdminSpendPage() {
@@ -48,9 +44,15 @@ export default function AdminSpendPage() {
   const [simTokensPerQuiz, setSimTokensPerQuiz] = useState<number>(1000);
   const [applySimulation, setApplySimulation] = useState(false);
 
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
   const fetchSpend = () => {
     setLoading(true);
-    setError(null);
+    setRefreshIndex((prev) => prev + 1);
+  };
+
+  useEffect(() => {
+    let isCancelled = false;
     const params = new URLSearchParams();
     if (search.trim()) params.set("search", search.trim());
     if (minorFilter === "minor") params.set("isMinor", "true");
@@ -61,26 +63,33 @@ export default function AdminSpendPage() {
 
     clientFetch<AdminSpendSummary>(`/admin/spend?${params.toString()}`)
       .then((res) => {
-        setData(res);
-        if (res.pricingRates?.costPerMillionTokens && simRate === 0.15) {
-          setSimRate(res.pricingRates.costPerMillionTokens);
+        if (!isCancelled) {
+          setData(res);
+          setError(null);
+          setLoading(false);
+          if (res.pricingRates?.costPerMillionTokens && simRate === 0.15) {
+            setSimRate(res.pricingRates.costPerMillionTokens);
+          }
         }
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to load user AI spend data");
-      })
-      .finally(() => setLoading(false));
-  };
+        if (!isCancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load user AI spend data");
+          setLoading(false);
+        }
+      });
 
-  useEffect(() => {
-    fetchSpend();
-  }, [search, minorFilter, roleFilter, sortBy, sortOrder]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [search, minorFilter, roleFilter, sortBy, sortOrder, refreshIndex, simRate]);
 
   // Simulated metrics and user items
+  const users = data?.users;
   const processedUsers = useMemo(() => {
-    if (!data?.users) return [];
+    if (!users) return [];
 
-    let list = data.users.map((u) => {
+    let list = users.map((u) => {
       if (!applySimulation) return u;
 
       const simDocTokens = u.documentCount * simTokensPerDoc;
@@ -120,7 +129,7 @@ export default function AdminSpendPage() {
     }
 
     return list;
-  }, [data?.users, applySimulation, simRate, simTokensPerDoc, simTokensPerMsg, simTokensPerQuiz, activeOnly, sortBy, sortOrder]);
+  }, [users, applySimulation, simRate, simTokensPerDoc, simTokensPerMsg, simTokensPerQuiz, activeOnly, sortBy, sortOrder]);
 
   // Aggregate stats (taking simulation into account if active)
   const stats = useMemo(() => {
