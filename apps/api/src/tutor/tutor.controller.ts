@@ -43,4 +43,9 @@ export class TutorController {
   ) {
     return this.tutorService.history(user.sub, topicId, documentId);
   }
+
+  @Get('threads')
+  threads(@CurrentUser() user: AccessTokenPayload) {
+    return this.tutorService.getThreads(user.sub);
+  }
 }
