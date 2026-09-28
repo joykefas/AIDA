@@ -4,6 +4,7 @@ import {
   TutorCitation,
   TutorChatMessage,
   TutorMessageResponse,
+  TutorThreadSummary,
 } from '@aida/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmProvider } from '../providers/llm.provider';
@@ -220,5 +221,81 @@ export class TutorService {
       where: { id: messageId },
       data: { rating, feedbackText },
     });
+  }
+
+  async getThreads(userId: string): Promise<TutorThreadSummary[]> {
+    const documents = await this.prisma.document.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        topics: {
+          select: { id: true, title: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    const recentMessages = await this.prisma.tutorMessage.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+
+    const messageMap = new Map<
+      string | null,
+      {
+        lastMessage: {
+          content: string;
+          role: 'user' | 'assistant';
+          createdAt: string;
+        };
+        count: number;
+      }
+    >();
+
+    for (const msg of recentMessages) {
+      const key = msg.documentId ?? null;
+      const existing = messageMap.get(key);
+      if (!existing) {
+        messageMap.set(key, {
+          lastMessage: {
+            content: msg.content,
+            role: msg.role as 'user' | 'assistant',
+            createdAt: msg.createdAt.toISOString(),
+          },
+          count: 1,
+        });
+      } else {
+        existing.count++;
+      }
+    }
+
+    const threads: TutorThreadSummary[] = documents.map((doc) => {
+      const msgInfo = messageMap.get(doc.id);
+      return {
+        documentId: doc.id,
+        title: doc.title,
+        type: doc.type,
+        status: doc.status,
+        createdAt: doc.createdAt.toISOString(),
+        topics: doc.topics,
+        lastMessage: msgInfo?.lastMessage ?? null,
+        messageCount: msgInfo?.count ?? 0,
+      };
+    });
+
+    const globalMsgInfo = messageMap.get(null);
+    const globalThread: TutorThreadSummary = {
+      documentId: null,
+      title: 'General AI Tutor (All Materials)',
+      type: null,
+      status: 'READY',
+      createdAt: new Date().toISOString(),
+      topics: [],
+      lastMessage: globalMsgInfo?.lastMessage ?? null,
+      messageCount: globalMsgInfo?.count ?? 0,
+    };
+
+    return [globalThread, ...threads];
   }
 }

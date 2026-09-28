@@ -51,3 +51,18 @@ export interface RateTutorMessageRequest {
   rating: "HELPFUL" | "UNHELPFUL";
   feedbackText?: string;
 }
+
+export interface TutorThreadSummary {
+  documentId: string | null;
+  title: string;
+  type: string | null;
+  status: string;
+  createdAt: string;
+  topics: { id: string; title: string }[];
+  lastMessage: {
+    content: string;
+    role: "user" | "assistant";
+    createdAt: string;
+  } | null;
+  messageCount: number;
+}
