@@ -44,15 +44,48 @@ export class TutorService {
 
     let topicIds: string[] = [];
     let resolvedDocumentId = dto.documentId;
+    const selectedTopicNotesChunks: RetrievedChunk[] = [];
 
     if (dto.topicId) {
       const topic = await this.prisma.topic.findFirst({
         where: { id: dto.topicId, document: { userId } },
-        select: { id: true, documentId: true },
+        select: {
+          id: true,
+          documentId: true,
+          title: true,
+          summary: true,
+          notes: true,
+        },
       });
       if (!topic) throw new NotFoundException('Topic not found.');
-      topicIds = [topic.id];
       if (!resolvedDocumentId) resolvedDocumentId = topic.documentId;
+
+      if (topic.summary && topic.summary.trim()) {
+        selectedTopicNotesChunks.push({
+          topicId: topic.id,
+          topicTitle: topic.title,
+          chunk: `[${topic.title} - Summary]\n${topic.summary.trim()}`,
+        });
+      }
+      if (Array.isArray(topic.notes)) {
+        for (const n of topic.notes as { title?: string; content?: string }[]) {
+          if (n && n.content) {
+            selectedTopicNotesChunks.push({
+              topicId: topic.id,
+              topicTitle: topic.title,
+              chunk: `[${topic.title} - ${n.title ?? 'Notes'}]\n${n.content}`,
+            });
+          }
+        }
+      }
+
+      // Always include all topic IDs for the document so embeddings attached to
+      // the primary topic (or across the document) are fully accessible!
+      const docTopics = await this.prisma.topic.findMany({
+        where: { documentId: topic.documentId },
+        select: { id: true },
+      });
+      topicIds = docTopics.map((t) => t.id);
     } else if (dto.documentId) {
       const topics = await this.prisma.topic.findMany({
         where: { documentId: dto.documentId, document: { userId } },
@@ -92,10 +125,20 @@ export class TutorService {
       }
     }
 
-    const contextChunks =
+    const retrievedChunks =
       topicIds.length > 0
         ? await this.retrieveContext(retrievalQuery, topicIds)
         : [];
+
+    // Prepend topic-specific notes/summary, followed by retrieved hybrid chunks
+    const chunkMap = new Map<string, RetrievedChunk>();
+    for (const c of [...selectedTopicNotesChunks, ...retrievedChunks]) {
+      const key = c.chunk.trim();
+      if (!chunkMap.has(key)) {
+        chunkMap.set(key, c);
+      }
+    }
+    const contextChunks = Array.from(chunkMap.values()).slice(0, 12);
 
     const { answer } = await this.llm.answerTutorQuestion({
       question: dto.message,
@@ -153,21 +196,147 @@ export class TutorService {
     question: string,
     topicIds: string[],
   ): Promise<RetrievedChunk[]> {
-    const vector = await this.embeddingProvider.embed(question);
-    const queryVector = toVectorLiteral(vector);
-    const rows = await this.prisma.$queryRawUnsafe<
-      { topicId: string; topicTitle: string; chunk: string }[]
-    >(
-      `SELECT e."topicId" as "topicId", t.title as "topicTitle", e.chunk as chunk
-       FROM "Embedding" e
-       JOIN "Topic" t ON t.id = e."topicId"
-       WHERE e."topicId" = ANY($1)
-       ORDER BY e.vector <=> $2::vector ASC
-       LIMIT 5`,
-      topicIds,
-      queryVector,
-    );
-    return rows;
+    if (topicIds.length === 0) return [];
+
+    // 1. Vector similarity search
+    let vectorRows: { topicId: string; topicTitle: string; chunk: string }[] =
+      [];
+    try {
+      const vector = await this.embeddingProvider.embed(question);
+      const queryVector = toVectorLiteral(vector);
+      vectorRows = await this.prisma.$queryRawUnsafe<
+        { topicId: string; topicTitle: string; chunk: string }[]
+      >(
+        `SELECT e."topicId" as "topicId", t.title as "topicTitle", e.chunk as chunk
+         FROM "Embedding" e
+         JOIN "Topic" t ON t.id = e."topicId"
+         WHERE e."topicId" = ANY($1)
+         ORDER BY e.vector <=> $2::vector ASC
+         LIMIT 8`,
+        topicIds,
+        queryVector,
+      );
+    } catch {
+      vectorRows = [];
+    }
+
+    // 2. Keyword & Lexical search (PostgreSQL full-text + ILIKE)
+    const stopWords = new Set([
+      'what',
+      'is',
+      'are',
+      'the',
+      'a',
+      'an',
+      'in',
+      'on',
+      'of',
+      'for',
+      'to',
+      'and',
+      'or',
+      'can',
+      'you',
+      'how',
+      'why',
+      'give',
+      'does',
+      'did',
+      'do',
+      'defined',
+      'explain',
+      'describe',
+      'tell',
+      'about',
+      'from',
+      'with',
+      'that',
+      'this',
+      'these',
+      'those',
+    ]);
+    const cleanTokens = question
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 3 && !stopWords.has(w));
+    const uniqueTokens = Array.from(new Set(cleanTokens));
+
+    let keywordRows: { topicId: string; topicTitle: string; chunk: string }[] =
+      [];
+    if (uniqueTokens.length > 0) {
+      const ilikePatterns = uniqueTokens.map((t) => `%${t}%`);
+      const searchPhrase = uniqueTokens.join(' ');
+      try {
+        keywordRows = await this.prisma.$queryRawUnsafe<
+          { topicId: string; topicTitle: string; chunk: string }[]
+        >(
+          `SELECT e."topicId" as "topicId", t.title as "topicTitle", e.chunk as chunk,
+                  ts_rank(to_tsvector('english', e.chunk), plainto_tsquery('english', $2)) as rank
+           FROM "Embedding" e
+           JOIN "Topic" t ON t.id = e."topicId"
+           WHERE e."topicId" = ANY($1)
+             AND (
+               to_tsvector('english', e.chunk) @@ plainto_tsquery('english', $2)
+               OR e.chunk ILIKE ANY($3)
+             )
+           ORDER BY rank DESC
+           LIMIT 8`,
+          topicIds,
+          searchPhrase,
+          ilikePatterns,
+        );
+      } catch {
+        // Fallback to simple ILIKE if ts_rank / to_tsvector encounters edge-case syntax
+        try {
+          keywordRows = await this.prisma.$queryRawUnsafe<
+            { topicId: string; topicTitle: string; chunk: string }[]
+          >(
+            `SELECT e."topicId" as "topicId", t.title as "topicTitle", e.chunk as chunk
+             FROM "Embedding" e
+             JOIN "Topic" t ON t.id = e."topicId"
+             WHERE e."topicId" = ANY($1)
+               AND e.chunk ILIKE ANY($2)
+             LIMIT 8`,
+            topicIds,
+            ilikePatterns,
+          );
+        } catch {
+          keywordRows = [];
+        }
+      }
+    }
+
+    // 3. Merge & Deduplicate (Hybrid ranking)
+    const chunkMap = new Map<string, { item: RetrievedChunk; score: number }>();
+
+    for (let i = 0; i < keywordRows.length; i++) {
+      const row = keywordRows[i];
+      const key = row.chunk.trim();
+      let keywordHits = 0;
+      const lower = row.chunk.toLowerCase();
+      for (const t of uniqueTokens) {
+        if (lower.includes(t)) keywordHits++;
+      }
+      const score = 100 - i * 5 + keywordHits * 10;
+      chunkMap.set(key, { item: row, score });
+    }
+
+    for (let i = 0; i < vectorRows.length; i++) {
+      const row = vectorRows[i];
+      const key = row.chunk.trim();
+      const existing = chunkMap.get(key);
+      if (existing) {
+        existing.score += 50 - i * 3;
+      } else {
+        chunkMap.set(key, { item: row, score: 50 - i * 3 });
+      }
+    }
+
+    return Array.from(chunkMap.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map((entry) => entry.item);
   }
 
   async history(

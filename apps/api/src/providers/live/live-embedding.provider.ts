@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { EmbeddingProvider, EMBEDDING_DIM } from '../embedding.provider';
+import { EmbeddingProvider } from '../embedding.provider';
+import { pseudoEmbedding } from '../../documents/embeddings.util';
 
 /**
  * Calls an OpenAI-compatible /embeddings API (Fireworks AI, Together AI, or OpenAI).
@@ -9,10 +10,15 @@ import { EmbeddingProvider, EMBEDDING_DIM } from '../embedding.provider';
 export class LiveEmbeddingProvider extends EmbeddingProvider {
   private readonly logger = new Logger(LiveEmbeddingProvider.name);
   private hasWarnedMissingCredentials = false;
-  private readonly baseUrl =
-    process.env.EMBEDDING_BASE_URL ?? process.env.LLM_BASE_URL;
   private readonly apiKey =
-    process.env.EMBEDDING_API_KEY ?? process.env.LLM_API_KEY;
+    process.env.EMBEDDING_API_KEY ??
+    process.env.OPENAI_API_KEY ??
+    process.env.LLM_API_KEY;
+  private readonly baseUrl =
+    process.env.EMBEDDING_BASE_URL ??
+    (process.env.OPENAI_API_KEY
+      ? 'https://api.openai.com/v1'
+      : process.env.LLM_BASE_URL);
   private readonly model =
     process.env.EMBEDDING_MODEL ?? 'text-embedding-3-small';
 
@@ -26,7 +32,7 @@ export class LiveEmbeddingProvider extends EmbeddingProvider {
     try {
       if (!this.apiKey || !this.baseUrl) {
         throw new Error(
-          'Live embedding credentials not configured (set EMBEDDING_API_KEY and EMBEDDING_BASE_URL)',
+          'Live embedding credentials not configured (set EMBEDDING_API_KEY and EMBEDDING_BASE_URL, or OPENAI_API_KEY)',
         );
       }
 
@@ -57,21 +63,11 @@ export class LiveEmbeddingProvider extends EmbeddingProvider {
     } catch (err) {
       if (!this.hasWarnedMissingCredentials) {
         this.logger.warn(
-          `Live embedding fallback engaged: ${(err as Error).message}. Using deterministic 1536-dim vectors.`,
+          `Live embedding fallback engaged: ${(err as Error).message}. Using semantic bag-of-words 1536-dim vectors.`,
         );
         this.hasWarnedMissingCredentials = true;
       }
-      let seed = 0;
-      return texts.map((text) => {
-        for (let i = 0; i < text.length; i++)
-          seed = (Math.imul(31, seed) + text.charCodeAt(i)) | 0;
-        const v: number[] = [];
-        for (let i = 0; i < EMBEDDING_DIM; i++) {
-          seed = (Math.imul(1103515245, seed) + 12345) | 0;
-          v.push(((seed >>> 0) % 2000) / 1000 - 1);
-        }
-        return v;
-      });
+      return texts.map((text) => pseudoEmbedding(text));
     }
   }
 }
