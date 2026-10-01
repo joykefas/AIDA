@@ -10,9 +10,10 @@ import { TranscriptionProvider } from '../providers/transcription.provider';
 import { LlmProvider } from '../providers/llm.provider';
 import { EmbeddingProvider } from '../providers/embedding.provider';
 import { ReviewService } from '../review/review.service';
-import { chunkText, toVectorLiteral } from './embeddings.util';
+import { smartChunkText, toVectorLiteral } from './embeddings.util';
 
-const CHUNK_SIZE = 500;
+const CHUNK_SIZE = 1000;
+const CHUNK_OVERLAP = 200;
 
 function detectAudioMimeType(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
@@ -170,7 +171,7 @@ export class IngestionService {
     });
     const text = document.extractedText ?? document.title;
 
-    const chunks = chunkText(text, CHUNK_SIZE);
+    const chunks = smartChunkText(text, CHUNK_SIZE, CHUNK_OVERLAP);
 
     let topic = await this.prisma.topic.findFirst({
       where: { documentId, isPrimary: true },

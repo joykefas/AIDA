@@ -117,11 +117,17 @@ describe('AdminService - Spend & Outliers', () => {
 
       prisma.user.findMany.mockResolvedValue(mockUsers);
 
-      const resultDesc = await service.getUserSpendSummary({ sortBy: 'tokens', sortOrder: 'desc' });
+      const resultDesc = await service.getUserSpendSummary({
+        sortBy: 'tokens',
+        sortOrder: 'desc',
+      });
       expect(resultDesc.users[0].userId).toBe('high');
       expect(resultDesc.users[1].userId).toBe('low');
 
-      const resultAsc = await service.getUserSpendSummary({ sortBy: 'tokens', sortOrder: 'asc' });
+      const resultAsc = await service.getUserSpendSummary({
+        sortBy: 'tokens',
+        sortOrder: 'asc',
+      });
       expect(resultAsc.users[0].userId).toBe('low');
       expect(resultAsc.users[1].userId).toBe('high');
     });

@@ -1,4 +1,9 @@
-import { chunkText, toVectorLiteral, EMBEDDING_DIM } from './embeddings.util';
+import {
+  chunkText,
+  smartChunkText,
+  toVectorLiteral,
+  EMBEDDING_DIM,
+} from './embeddings.util';
 import { MockEmbeddingProvider } from '../providers/mock/mock-embedding.provider';
 
 describe('Document Embeddings & Chunking', () => {
@@ -21,6 +26,31 @@ describe('Document Embeddings & Chunking', () => {
 
     it('should handle empty string gracefully', () => {
       const chunks = chunkText('', 500);
+      expect(chunks).toEqual(['']);
+    });
+  });
+
+  describe('smartChunkText', () => {
+    it('should return single chunk if text is smaller than targetSize', () => {
+      const text = 'Short paragraph for smart chunking.';
+      const chunks = smartChunkText(text, 1000, 200);
+      expect(chunks).toEqual([text]);
+    });
+
+    it('should split on paragraph boundaries with overlap', () => {
+      const p1 =
+        'Paragraph 1 discussing entrepreneurship and innovation.'.repeat(8);
+      const p2 =
+        'Paragraph 2 exploring market opportunities and ventures.'.repeat(8);
+      const combined = `${p1}\n\n${p2}`;
+      const chunks = smartChunkText(combined, 500, 100);
+      expect(chunks.length).toBeGreaterThan(1);
+      expect(chunks[0]).toContain('Paragraph 1');
+      expect(chunks[chunks.length - 1]).toContain('Paragraph 2');
+    });
+
+    it('should handle empty string gracefully', () => {
+      const chunks = smartChunkText('', 1000, 200);
       expect(chunks).toEqual(['']);
     });
   });
